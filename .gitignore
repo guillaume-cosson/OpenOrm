@@ -1,0 +1,20 @@
+﻿################################################################################
+# Ce fichier .gitignore a été automatiquement créé par Microsoft(R) Visual Studio.
+################################################################################
+/.svn
+/Demo/bin
+/Demo/obj
+/OpenOrm/bin
+/OpenOrm/obj
+/OpenOrm.Blazor/bin
+/OpenOrm.Blazor/obj
+/OpenOrm.MySql/bin
+/OpenOrm.MySql/obj
+/OpenOrm.SQLite/bin
+/OpenOrm.SQLite/obj
+/OpenOrm.SqlServer/bin
+/OpenOrm.SqlServer/obj
+/OpenOrmTools/bin
+/OpenOrmTools/obj
+/XUnitTests/bin
+/XUnitTests/obj

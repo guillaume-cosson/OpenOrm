@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenOrm.SqlServer\OpenOrm.SqlServer.csproj" />
+    <ProjectReference Include="..\OpenOrm\OpenOrm.csproj" />
+  </ItemGroup>
+
+</Project>

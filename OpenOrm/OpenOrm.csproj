@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <AssemblyVersion>0.3.3.0</AssemblyVersion>
+    <FileVersion>0.3.3.0</FileVersion>
+    <Version>0.3.3</Version>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>OpenOrm is a light weight open source micro Orm.
+It works with SqlServer, SQLite and MySql databases for now.
+Keep in mind OpenOrm is still a "Work in progress" project.</Description>
+    <Authors>Guillaume Cosson</Authors>
+    <Company>Guillaume Cosson</Company>
+    <PackageProjectUrl>https://github.com/guillaume-cosson/OpenOrm</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/guillaume-cosson/OpenOrm</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>2021 Guillaume Cosson</Copyright>
+    <Configurations>Debug;Release;x64</Configurations>
+    <PackageIcon>openorm.png</PackageIcon>
+    <PackageIconUrl />
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>DEBUG</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='x64|AnyCPU'">
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\openorm.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>

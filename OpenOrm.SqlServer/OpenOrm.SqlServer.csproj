@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Version>0.3.3</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <Copyright>2021 Guillaume Cosson</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/guillaume-cosson/OpenOrm</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/guillaume-cosson/OpenOrm</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Authors>Guillaume Cosson</Authors>
+    <Description>OpenOrm is a light weight open source micro Orm.
+It works with SqlServer, SQLite and MySql databases for now.
+Keep in mind OpenOrm is still a "Work in progress" project.</Description>
+    <PackageIcon>openorm.png</PackageIcon>
+    <PackageIconUrl />
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenOrm\OpenOrm.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\openorm.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
