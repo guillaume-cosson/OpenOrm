@@ -13,6 +13,17 @@ Plans to support : As needed, ask in issues !
 - Fully parameterized queries (strong vs sql injections) 
 - Sql migrations (code first)
 
+## Add to your projects
+VS Package Manager
+````sh
+Install-Package OpenOrm
+````
+
+.NET CLI
+````sh
+dotnet add package OpenOrm
+````
+
 ## Basic usage
 Having a class named MyObjectClass as :
 ````cs
@@ -65,8 +76,8 @@ if(!db.TableExists<MyObjectClass>())
 long inserted_id = db.Insert(new MyObjectClass { SomeStringProperty = "test" } );
 
 //Base select, returns a list of MyObjectClass type 
-var my_objects_list = db.Select<MyObjectClass>(); 
-var first_object = db.SelectFirst<MyObjectClass>(x => x.Id == 1);
+List<MyObjectClass> my_objects_list = db.Select<MyObjectClass>(); 
+MyObjectClass first_object = db.SelectFirst<MyObjectClass>(x => x.Id == 1);
 
 //Updates and Deletes are based on PrimaryKey
 MyObjectClass o = db.SelectById(1); 
