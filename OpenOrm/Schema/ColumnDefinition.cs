@@ -253,51 +253,5 @@ namespace OpenOrm.Schema
                 }
             }
         }
-
-        //public void SetTypeFromTypeName(string typeName)
-        //{
-        //    typeName = typeName.ToLower().Trim();
-
-        //    switch(typeName)
-        //    {
-        //        default:
-        //        case "string":
-        //            ColumnType = typeof(string);
-        //            break;
-        //    }
-
-        //    switch (typeName)
-        //    {
-        //        case "string":
-        //        case "char":
-        //            ColumnType = typeof(string);
-        //            break;
-        //        case "long":
-        //        case "int64":
-        //        case "int":
-        //        case "int32":
-        //        case "int16":
-        //        case "short":
-        //            formattedValue = $"{value}";
-        //            break;
-        //        case "decimal":
-        //        case "double":
-        //        case "float":
-        //        case "single":
-        //            formattedValue = $"{value}";
-        //            break;
-        //        case "datetime":
-        //            formattedValue = $"'{(DateTime)value:dd/MM/yyyy HH:mm:ss}'";
-        //            break;
-        //        case "bool":
-        //        case "boolean":
-        //            string bv = (bool)value ? "1" : "0";
-        //            formattedValue = $"{bv}";
-        //            break;
-        //        case "object":
-        //            formattedValue = $"'{value}'";
-        //            break;
-        //    }
-        //}
     }
 }
