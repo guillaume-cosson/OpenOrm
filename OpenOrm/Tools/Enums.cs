@@ -8,6 +8,7 @@
         //PostgreSQL,
         //MariaDB,
         //Azure,
+        //Oracle,
         //Blazor
     }
 
