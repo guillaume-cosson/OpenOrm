@@ -21,7 +21,6 @@ namespace OpenOrm.Configuration
         //public bool EnableAutomaticMigration { get; set; }
         //public bool AutoDetectNestedObjects { get; set; }
         public bool ForceAutoLoadNestedObjects { get; set; }
-        //public bool CreateIndexForEachColumn { get; set; }
         public bool GenerateOrmDocInDatabase { get; set; }
         //public int ListInsertChunkSize { get; set; } //Values limited to 1000 per request -> chunks size calculated at insert
         public bool ListInsertAllowBulkInsert { get; set; }
@@ -46,7 +45,6 @@ namespace OpenOrm.Configuration
             //EnableAutomaticMigration = false;
             //AutoDetectNestedObjects = false;
             ForceAutoLoadNestedObjects = false;
-            //CreateIndexForEachColumn = false;
             GenerateOrmDocInDatabase = false;
             //ListInsertChunkSize = 500;
             ListInsertAllowBulkInsert = false;
