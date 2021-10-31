@@ -26,9 +26,12 @@ namespace OpenOrm.Schema
 		public List<ColumnDefinition> Columns { get; set; }
 		public List<ColumnDefinition> NestedColumns { get; set; }
 		public List<ColumnDefinition> PrimaryKeys { get { return Columns.Where(x => x.IsPrimaryKey).ToList(); } }
+		public List<ColumnDefinition> ForeignKeys { get; set; }
 		public int PrimaryKeysCount { get; set; }
-		public bool ContainsNestedColumns { get { return NestedColumns?.Count > 0; } }
-		public bool ContainsNestedColumnsAutoLoad { get { return NestedColumns?.Where(x => x.NestedAutoLoad).Count() > 0; } }
+		public bool ContainsNestedColumns { get { return NestedColumns.Any(); } }
+		public bool ContainsNestedColumnsAutoLoad { get { return NestedColumns.Any(x => x.NestedAutoLoad); } }
+		public bool ContainsForeignKeys { get { return ForeignKeys.Any(); } }
+		public bool ContainsForeignKeysAutoLoad { get { return ForeignKeys.Any(x => x.NestedAutoLoad); } }
 		public bool IsDbCacheInitialized { get; set; }
 		public bool ExistsInDb { get; set; }
 		#endregion
@@ -41,6 +44,8 @@ namespace OpenOrm.Schema
 			}
 
 			Columns = new List<ColumnDefinition>();
+			NestedColumns = new List<ColumnDefinition>();
+			ForeignKeys = new List<ColumnDefinition>();
 		}
 
 		public TableDefinition(Type t, bool useCache = true, bool includePrivateProperties = false)
@@ -49,6 +54,10 @@ namespace OpenOrm.Schema
 			{
 				Cache = new ConcurrentDictionary<string, TableDefinition>();
 			}
+
+			Columns = new List<ColumnDefinition>();
+			NestedColumns = new List<ColumnDefinition>();
+			ForeignKeys = new List<ColumnDefinition>();
 
 			Load(t, useCache, includePrivateProperties);
 
@@ -65,6 +74,7 @@ namespace OpenOrm.Schema
 				TableName = cached.TableName;
 				Columns = cached.Columns;
 				NestedColumns = cached.NestedColumns;
+				ForeignKeys = cached.ForeignKeys;
 				PrimaryKeysCount = cached.PrimaryKeysCount;
 			}
 			else
@@ -87,8 +97,14 @@ namespace OpenOrm.Schema
 				List<PropertyInfo> nestedProperties = OpenOrmTools.GetNestedProperties(t, includePrivateProperties);
 				foreach (PropertyInfo pi in nestedProperties)
 				{
-					ColumnDefinition coldef = new ColumnDefinition(pi, useCache);
-					NestedColumns.Add(coldef);
+					NestedColumns.Add(new ColumnDefinition(pi, useCache));
+				}
+
+				ForeignKeys = new List<ColumnDefinition>();
+				List<PropertyInfo> foreignKeyProperties = OpenOrmTools.GetForeignKeyProperties(t, includePrivateProperties);
+				foreach (PropertyInfo pi in foreignKeyProperties)
+				{
+					ForeignKeys.Add(new ColumnDefinition(pi, useCache));
 				}
 
 				if (PrimaryKeysCount == 0)
@@ -150,5 +166,10 @@ namespace OpenOrm.Schema
 
 		//	return cmd;
 		//}
+
+		public override string ToString()
+		{
+			return TableName;
+		}
 	}
 }

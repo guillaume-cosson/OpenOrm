@@ -188,7 +188,7 @@ namespace OpenOrm
 				string attributesStr = string.Join(",", info.CustomAttributes);
 				//if (info.CustomAttributes != null && info.CustomAttributes.GetEnumerator().Current.NamedArguments.Count > 0 && attributesStr.Contains("IgnoreAttribute")) continue;
 				if (info.CustomAttributes != null && info.CustomAttributes.Count() > 0 && 
-					(attributesStr.Contains("DbIgnore") || attributesStr.Contains("DbLoadNestedList"))) continue;
+					(attributesStr.Contains("DbIgnore") || attributesStr.Contains("DbLoadNestedObject"))) continue;
 				if (!info.PropertyType.IsPublic) continue;
 				if (!info.CanRead || !info.CanWrite) continue;
 
@@ -270,7 +270,50 @@ namespace OpenOrm
 
 				string attributesStr = string.Join(",", info.CustomAttributes);
 				//if (info.CustomAttributes != null && info.CustomAttributes.GetEnumerator().Current.NamedArguments.Count > 0 && attributesStr.Contains("IgnoreAttribute")) continue;
-				if (!attributesStr.Contains("DbLoadNestedList")) continue;
+				if (!attributesStr.Contains("DbLoadNestedObject")) continue;
+				if (!info.PropertyType.IsPublic) continue;
+				if (!info.CanRead || !info.CanWrite) continue;
+
+				result.Add(info);
+			}
+
+			return result;
+		}
+
+		public static List<PropertyInfo> GetForeignKeyProperties(Type t, bool includePrivateProperties = false)
+		{
+			//if (TableStructureCache == null) TableStructureCache = new Dictionary<string, TableDefinition>();
+
+			List<PropertyInfo> result = new List<PropertyInfo>();
+			PropertyInfo[] property_infos;
+
+			if (includePrivateProperties)
+			{
+				property_infos = t.GetProperties(
+					BindingFlags.FlattenHierarchy |
+					BindingFlags.Instance |
+					BindingFlags.Public |
+					BindingFlags.NonPublic);
+			}
+			else
+			{
+				property_infos = t.GetProperties(
+					BindingFlags.FlattenHierarchy |
+					BindingFlags.Instance |
+					BindingFlags.Public);
+			}
+
+			for (int i = 0; i < property_infos.Length; i++)
+			{
+				PropertyInfo info = property_infos[i];
+				//string name = info.Name;
+				//string attributes = info.PropertyType.Attributes.ToString();
+				//if (info.CanRead) attributes += " get";
+				//if (info.CanWrite) attributes += " set";
+
+				string attributesStr = string.Join(",", info.CustomAttributes);
+				//if (info.CustomAttributes != null && info.CustomAttributes.GetEnumerator().Current.NamedArguments.Count > 0 && attributesStr.Contains("IgnoreAttribute")) continue;
+				if (!attributesStr.Contains("DbForeignKey")) continue;
 				if (!info.PropertyType.IsPublic) continue;
 				if (!info.CanRead || !info.CanWrite) continue;
 
