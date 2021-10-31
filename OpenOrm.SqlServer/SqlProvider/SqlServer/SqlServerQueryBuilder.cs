@@ -548,7 +548,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             List<T> result = sq.ReadToObjectList<T>();
 
             //Load nested objects/values
-            if(td.ContainsNestedColumns && forceLoadNestedObjects || td.ContainsNestedColumnsAutoLoad)
+            if ((((td.ContainsNestedColumns || td.ContainsForeignKeys) && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
             {
                 LoadNestedValues(cnx, forceLoadNestedObjects, ref result);
             }
@@ -577,7 +577,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             List<T> result = sq.ReadToObjectList<T>();
 
             //Load nested objects/values
-            if (((td.ContainsNestedColumns && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
+            if ((((td.ContainsNestedColumns || td.ContainsForeignKeys) && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
             {
                 LoadNestedValues(cnx, forceLoadNestedObjects, ref result);
             }
@@ -597,7 +597,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             T result = sq.ReadToObject<T>();
 
             //Load nested objects/values
-            if (((td.ContainsNestedColumns && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
+            if ((((td.ContainsNestedColumns || td.ContainsForeignKeys) && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
             {
                 List<T> list = new List<T>();
                 list.Add(result);
@@ -628,7 +628,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             T result = sq.ReadToObject<T>();
 
             //Load nested objects/values
-            if (((td.ContainsNestedColumns && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
+            if ((((td.ContainsNestedColumns || td.ContainsForeignKeys) && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
             {
                 List<T> list = new List<T>();
                 list.Add(result);
@@ -659,7 +659,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             T result = sq.ReadToObjectLast<T>();
 
             //Load nested objects/values
-            if (((td.ContainsNestedColumns && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
+            if ((((td.ContainsNestedColumns || td.ContainsForeignKeys) && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
             {
                 List<T> list = new List<T>();
                 list.Add(result);
@@ -675,7 +675,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
             //string fields = string.Join(",", OpenOrmTools.GetFieldNames<T>());
             //string fields = $"[{string.Join("],[", td.Columns.Select(x => x.Name))}]";
-            if(td.PrimaryKeys.Count == 0)
+            if(!td.PrimaryKeys.Any())
             {
                 throw new KeyNotFoundException($"PrimaryKey not found for model {typeof(T).FullName}");
             }
@@ -685,7 +685,7 @@ namespace OpenOrm.SqlProvider.SqlServer
             T result = sq.ReadToObject<T>();
 
             //Load nested objects/values
-            if (((td.ContainsNestedColumns && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
+            if ((((td.ContainsNestedColumns || td.ContainsForeignKeys) && forceLoadNestedObjects) || td.ContainsNestedColumnsAutoLoad || td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && result != null)
             {
                 List<T> list = new List<T>();
                 list.Add(result);
@@ -934,109 +934,224 @@ namespace OpenOrm.SqlProvider.SqlServer
 
             TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
 
-            foreach (ColumnDefinition cd in td.NestedColumns)
+            if(td.ContainsNestedColumns)
             {
-                if (!cd.NestedAutoLoad && !forceLoad) continue;
-
-                TableDefinition nested_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-                string fields = string.Join(",", nested_td.Columns.Select(x => x.Name));
-
-                if (cd.PropertyType.IsListOrArray())
+                foreach (ColumnDefinition cd in td.NestedColumns)
                 {
-                    List<object> keys = Result.Select(x => x.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(x, null)).Distinct().ToList();
+                    if (!cd.NestedAutoLoad && !forceLoad) continue;
 
-                    string sql = "";
-                    if(cd.NestedChildForeignKeyPropertyType.Name.ToLower() == "string")
+                    TableDefinition nested_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                    string fields = nested_td.GetFieldsStr();
+
+                    if (cd.PropertyType.IsListOrArray())
                     {
-                        sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)} WHERE {cd.NestedChildForeignKeyProperty} IN ('{string.Join("','", keys)}')";
+                        List<object> keys = Result.Select(x => x.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(x, null)).Distinct().ToList();
+
+                        string sql = "";
+                        if (cd.NestedChildForeignKeyPropertyType.Name.ToLower() == "string")
+                        {
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)} WHERE {cd.NestedChildForeignKeyProperty} IN ('{string.Join("','", keys)}')";
+                        }
+                        else
+                        {
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)} WHERE {cd.NestedChildForeignKeyProperty} IN ({string.Join(",", keys)})";
+                        }
+
+                        SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
+                        var nested = sq.ReadToObjectList(cd.NestedChildType);
+
+                        //Load nested objects/values
+                        if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                        {
+                            TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                            if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
+                            {
+                                LoadNestedValues(cnx, forceLoad, ref nested);
+                            }
+                        }
+
+                        if (nested.Count > 0)
+                        {
+                            foreach (T item in Result)
+                            {
+                                //var values = nested.Where(x => x.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(x, null).Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null))).ToList();
+
+                                Type listType = null;
+                                if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                                    listType = typeof(List<>).MakeGenericType(new[] { cd.NestedChildType });
+                                else
+                                    listType = typeof(List<>).MakeGenericType(new[] { nested[0].GetType().GetProperty(cd.NestedChildPropertyToGet).PropertyType });
+
+                                IList list = (IList)Activator.CreateInstance(listType);
+                                foreach (object o in nested)
+                                {
+                                    if (o.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(o, null).Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null)))
+                                    {
+                                        if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                                            list.Add(o);
+                                        else
+                                            list.Add(o.GetType().GetProperty(cd.NestedChildPropertyToGet).GetValue(o, null));
+                                    }
+                                }
+
+                                item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, list);
+                            }
+                        }
                     }
                     else
                     {
-                        sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)} WHERE {cd.NestedChildForeignKeyProperty} IN ({string.Join(",", keys)})";
-                    }
+                        List<object> keys = Result.Select(x => x.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(x, null)).Distinct().ToList();
 
-                    SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
-                    var nested = sq.ReadToObjectList(cd.NestedChildType);
-
-                    //Load nested objects/values
-                    if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
-                    {
-                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-                        if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
+                        string sql = "";
+                        if (cd.NestedParentPrimaryKeyProperty.GetType().Name.ToLower() == "string")
                         {
-                            LoadNestedValues(cnx, forceLoad, ref nested);
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)}";// WHERE {cd.NestedChildForeignKeyProperty} = '{string.Join("','", keys)}'";
                         }
-                    }
+                        else
+                        {
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)}";// WHERE {cd.NestedChildForeignKeyProperty} = {string.Join(",", keys)}";
+                        }
 
-                    if (nested.Count > 0)
-                    {
+                        SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
+                        var nested = sq.ReadToObjectList(cd.NestedChildType);
+
+                        //Load nested objects/values
+                        if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                        {
+                            TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                            if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
+                            {
+                                LoadNestedValues(cnx, forceLoad, ref nested);
+                            }
+                        }
+
                         foreach (T item in Result)
                         {
-                            //var values = nested.Where(x => x.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(x, null).Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null))).ToList();
-
-                            Type listType = null;
-                            if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
-                                listType = typeof(List<>).MakeGenericType(new[] { cd.NestedChildType });
-                            else
-                                listType = typeof(List<>).MakeGenericType(new[] { nested[0].GetType().GetProperty(cd.NestedChildPropertyToGet).PropertyType });
-
-                            IList list = (IList)Activator.CreateInstance(listType);
-                            foreach (object o in nested)
+                            var o = nested.Where(x => x.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(x, null)
+                                .Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null))).FirstOrDefault();
+                            if (o != null)
                             {
-                                if (o.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(o, null).Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null)))
+                                if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
                                 {
-                                    if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
-                                        list.Add(o);
-                                    else
-                                        list.Add(o.GetType().GetProperty(cd.NestedChildPropertyToGet).GetValue(o, null));
+                                    item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, o);
+                                }
+                                else
+                                {
+                                    var value = o.GetType().GetProperty(cd.NestedChildPropertyToGet).GetValue(o, null);
+                                    item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, value);
                                 }
                             }
-
-                            item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, list);
                         }
                     }
                 }
-                else
+            }
+            
+            if(td.ContainsForeignKeys)
+            {
+                foreach (ColumnDefinition cd in td.ForeignKeys)
                 {
-                    List<object> keys = Result.Select(x => x.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(x, null)).Distinct().ToList();
+                    if (!cd.ForeignAutoLoad && !forceLoad) continue;
 
-                    string sql = "";
-                    if (cd.NestedParentPrimaryKeyProperty.GetType().Name.ToLower() == "string")
+                    TableDefinition nested_td = TableDefinition.Get(cd.ForeignType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                    string fields = nested_td.GetFieldsStr();
+
+                    if (cd.ForeignType.IsListOrArray())
                     {
-                        sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)}";// WHERE {cd.NestedChildForeignKeyProperty} = '{string.Join("','", keys)}'";
+                        List<object> keys = Result.Select(x => x.GetType().GetProperty(cd.ParentForeignKeyProperty).GetValue(x, null)).Distinct().ToList();
+
+                        string sql = "";
+                        if (cd.NestedChildForeignKeyPropertyType.Name.ToLower() == "string")
+                        {
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.ForeignType)} WHERE {cd.NestedChildForeignKeyProperty} IN ('{string.Join("','", keys)}')";
+                        }
+                        else
+                        {
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.ForeignType)} WHERE {cd.NestedChildForeignKeyProperty} IN ({string.Join(",", keys)})";
+                        }
+
+                        SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
+                        var nested = sq.ReadToObjectList(cd.ForeignType);
+
+                        //Load nested objects/values
+                        if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                        {
+                            TableDefinition inner_td = TableDefinition.Get(cd.ForeignType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                            if (((inner_td.ContainsForeignKeys && forceLoad) || inner_td.ContainsForeignKeysAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
+                            {
+                                LoadNestedValues(cnx, forceLoad, ref nested);
+                            }
+                        }
+
+                        if (nested.Count > 0)
+                        {
+                            foreach (T item in Result)
+                            {
+                                //var values = nested.Where(x => x.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(x, null).Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null))).ToList();
+
+                                Type listType = null;
+                                if (string.IsNullOrEmpty(cd.ForeignChildTargetProperty))
+                                    listType = typeof(List<>).MakeGenericType(new[] { cd.ForeignType });
+                                else
+                                    listType = typeof(List<>).MakeGenericType(new[] { nested[0].GetType().GetProperty(cd.ForeignChildTargetProperty).PropertyType });
+
+                                IList list = (IList)Activator.CreateInstance(listType);
+                                foreach (object o in nested)
+                                {
+                                    if (o.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(o, null).Equals(item.GetType().GetProperty(cd.ParentForeignKeyProperty).GetValue(item, null)))
+                                    {
+                                        if (string.IsNullOrEmpty(cd.ForeignChildTargetProperty))
+                                            list.Add(o);
+                                        else
+                                            list.Add(o.GetType().GetProperty(cd.ForeignChildTargetProperty).GetValue(o, null));
+                                    }
+                                }
+
+                                item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, list);
+                            }
+                        }
                     }
                     else
                     {
-                        sql = $"SELECT {fields} FROM {GetTableName(cd.NestedChildType)}";// WHERE {cd.NestedChildForeignKeyProperty} = {string.Join(",", keys)}";
-                    }
+                        List<object> keys = Result.Select(x => x.GetType().GetProperty(cd.Name).GetValue(x, null)).Distinct().ToList();
 
-                    SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
-                    var nested = sq.ReadToObjectList(cd.NestedChildType);
-
-                    //Load nested objects/values
-                    if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
-                    {
-                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-                        if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
+                        string sql = "";
+                        if (cd.PropertyType.GetType().Name.ToLower() == "string")
                         {
-                            LoadNestedValues(cnx, forceLoad, ref nested);
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.ForeignType)} WHERE {cd.ParentForeignKeyProperty} IN ('{string.Join("','", keys)}') ";// WHERE {cd.NestedChildForeignKeyProperty} IN '{string.Join("','", keys)}'";
                         }
-                    }
-
-                    foreach (T item in Result)
-                    {
-                        var o = nested.Where(x => x.GetType().GetProperty(cd.NestedChildForeignKeyProperty).GetValue(x, null)
-                            .Equals(item.GetType().GetProperty(cd.NestedParentPrimaryKeyProperty).GetValue(item, null))).FirstOrDefault();
-                        if(o != null)
+                        else
                         {
-                            if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                            sql = $"SELECT {fields} FROM {GetTableName(cd.ForeignType)} WHERE {cd.ParentForeignKeyProperty} IN ({string.Join(",", keys)}) ";// WHERE {cd.NestedChildForeignKeyProperty} IN {string.Join(",", keys)}";
+                        }
+
+                        SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
+                        var nested = sq.ReadToObjectList(cd.ForeignType);
+
+                        //Load nested objects/values
+                        if (string.IsNullOrEmpty(cd.ForeignChildTargetProperty))
+                        {
+                            TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                            if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
                             {
-                                item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, o);
+                                LoadNestedValues(cnx, forceLoad, ref nested);
                             }
-                            else
+                        }
+
+                        foreach (T item in Result)
+                        {
+                            var o = nested.Where(x => x.GetType().GetProperty(cd.ParentForeignKeyProperty).GetValue(x, null)
+                                .Equals(item.GetType().GetProperty(cd.Name).GetValue(item, null))).FirstOrDefault();
+                            if (o != null)
                             {
-                                var value = o.GetType().GetProperty(cd.NestedChildPropertyToGet).GetValue(o, null);
-                                item.GetType().GetProperty(cd.PropertyInfo.Name).SetValue(item, value);
+                                if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
+                                {
+                                    item.GetType().GetProperty(cd.ForeignChildTargetProperty).SetValue(item, o);
+                                }
+                                else
+                                {
+                                    var value = o.GetType().GetProperty(cd.NestedChildPropertyToGet).GetValue(o, null);
+                                    item.GetType().GetProperty(cd.ForeignChildTargetProperty).SetValue(item, value);
+                                }
                             }
                         }
                     }

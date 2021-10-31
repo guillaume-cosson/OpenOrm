@@ -70,6 +70,11 @@ namespace OpenOrm.Schema
         public Type NestedParentPrimaryKeyPropertyType;
         public string NestedChildPropertyToGet;
         public bool NestedAutoLoad;
+        public bool IsForeignKey { get; set; }
+        public Type ForeignType { get; set; }
+        public string ForeignChildTargetProperty { get; set; }
+        public string ParentForeignKeyProperty { get; set; }
+        public bool ForeignAutoLoad;
         public PropertyInfo PropertyInfo { get; set; }
         public TableDefinition TableDefinition { get; set; }
 
@@ -85,6 +90,7 @@ namespace OpenOrm.Schema
             if(useCache && Cache.ContainsKey(pi.DeclaringType.FullName + "_" + pi.Name))
             {
                 ColumnDefinition cached = Cache[pi.DeclaringType.FullName + "_" + pi.Name];
+                OwnerType = cached.OwnerType;
                 DbType = cached.DbType;
                 DefaultValue = cached.DefaultValue;
                 HasDecimalSize = cached.HasDecimalSize;
@@ -111,6 +117,11 @@ namespace OpenOrm.Schema
                 NestedParentPrimaryKeyPropertyType = cached.NestedParentPrimaryKeyPropertyType;
                 NestedChildPropertyToGet = cached.NestedChildPropertyToGet;
                 NestedAutoLoad = cached.NestedAutoLoad;
+                IsForeignKey = cached.IsForeignKey;
+                ForeignType = cached.ForeignType;
+                ForeignChildTargetProperty = cached.ForeignChildTargetProperty;
+                ParentForeignKeyProperty = cached.ParentForeignKeyProperty;
+                ForeignAutoLoad = cached.ForeignAutoLoad;
             }
             else
             {
@@ -155,6 +166,11 @@ namespace OpenOrm.Schema
                 NestedParentPrimaryKeyPropertyType = cached.NestedParentPrimaryKeyPropertyType;
                 NestedChildPropertyToGet = cached.NestedChildPropertyToGet;
                 NestedAutoLoad = cached.NestedAutoLoad;
+                IsForeignKey = cached.IsForeignKey;
+                ForeignType = cached.ForeignType;
+                ForeignChildTargetProperty = cached.ForeignChildTargetProperty;
+                ParentForeignKeyProperty = cached.ParentForeignKeyProperty;
+                ForeignAutoLoad = cached.ForeignAutoLoad;
             }
             else
             {
@@ -210,16 +226,25 @@ namespace OpenOrm.Schema
                     Name = pi.GetPropertyAttributeValue((DbColumnName dbcn) => dbcn.Name);
                 }
 
-                if (pi.CustomAttributes.Any(x => x.AttributeType.Name == "DbLoadNestedList"))
+                if (pi.CustomAttributes.Any(x => x.AttributeType.Name == "DbLoadNestedObject"))
                 {
                     IsNestedProperty = true;
-                    NestedChildType = pi.GetPropertyAttributeValue((DbLoadNestedList attr) => attr.ChildType);
-                    NestedChildForeignKeyProperty = pi.GetPropertyAttributeValue((DbLoadNestedList attr) => attr.ChildForeignKeyProperty);
+                    NestedChildType = pi.GetPropertyAttributeValue((DbLoadNestedObject attr) => attr.ChildType);
+                    NestedChildForeignKeyProperty = pi.GetPropertyAttributeValue((DbLoadNestedObject attr) => attr.ChildForeignKeyProperty);
                     NestedChildForeignKeyPropertyType = OpenOrmTools.GetProperty(NestedChildType, NestedChildForeignKeyProperty).PropertyType;
-                    NestedParentPrimaryKeyProperty = pi.GetPropertyAttributeValue((DbLoadNestedList attr) => attr.ParentPrimaryKeyProperty);
+                    NestedParentPrimaryKeyProperty = pi.GetPropertyAttributeValue((DbLoadNestedObject attr) => attr.ParentPrimaryKeyProperty);
                     //NestedParentPrimaryKeyPropertyType = OpenOrmTools.GetProperty(TableDefinition., NestedParentPrimaryKeyProperty).PropertyType;
-                    NestedChildPropertyToGet = pi.GetPropertyAttributeValue((DbLoadNestedList attr) => attr.ChildPropertyToGet);
-                    NestedAutoLoad = pi.GetPropertyAttributeValue((DbLoadNestedList attr) => attr.AutoLoad);
+                    NestedChildPropertyToGet = pi.GetPropertyAttributeValue((DbLoadNestedObject attr) => attr.ChildPropertyToGet);
+                    NestedAutoLoad = pi.GetPropertyAttributeValue((DbLoadNestedObject attr) => attr.AutoLoad);
+                }
+
+                if (pi.CustomAttributes.Any(x => x.AttributeType.Name == "DbForeignKey"))
+                {
+                    IsForeignKey = true;
+                    ForeignType = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.ParentType);
+                    ForeignChildTargetProperty = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.ChildTargetProperty);
+                    ParentForeignKeyProperty = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.ParentPrimaryKeyProperty);
+                    ForeignAutoLoad = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.AutoLoad);
                 }
 
                 if (IsNotNullColumn)
@@ -252,6 +277,11 @@ namespace OpenOrm.Schema
                     if (Scale <= 0 || Precision < 0) HasDecimalSize = false;
                 }
             }
+        }
+
+        public override string ToString()
+        {
+            return Name;
         }
     }
 }

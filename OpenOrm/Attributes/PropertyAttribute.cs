@@ -33,7 +33,7 @@ namespace OpenOrm
     }
 
     /// <summary>
-    /// Auto map nested object by foreignkey
+    /// Auto map nested object by foreignkey when foreign key is stored in current object
     /// </summary>
     [AttributeUsage(AttributeTargets.Property)]
     public class DbForeignKey : Attribute
@@ -41,6 +41,7 @@ namespace OpenOrm
         public readonly Type ParentType;
         public readonly string ParentPrimaryKeyProperty;
         public readonly string ChildTargetProperty;
+        public readonly bool AutoLoad;
 
         /// <summary>
         /// Auto map nested object by foreignkey
@@ -48,19 +49,29 @@ namespace OpenOrm
         /// <param name="remote_type">Type of model that is the nested object in current model</param>
         /// <param name="remote_property_primary_key_name">Primary key (property name) of nested object (Id, Code, ...)</param>
         /// <param name="target_property_name">Target property name of current model that receive the loaded nested object</param>
-        public DbForeignKey(Type parent_type, string parent_property_primary_key_name = "Id", string target_property_name = "")
+        public DbForeignKey(Type parent_type, string parent_property_primary_key_name = "Id", string target_property_name = "", bool auto_load = true)
         {
             this.ParentType = parent_type;
             this.ParentPrimaryKeyProperty = parent_property_primary_key_name;
             this.ChildTargetProperty = target_property_name;
+            this.AutoLoad = auto_load && !string.IsNullOrEmpty(target_property_name);
         }
     }
 
+    //[AttributeUsage(AttributeTargets.Property)]
+    //public class DbLoadedByForeignKey : Attribute
+    //{
+    //    public DbLoadedByForeignKey()
+    //    {
+
+    //    }
+    //}
+
     /// <summary>
-    /// Auto map nested object by foreignkey
+    /// Auto map nested object by foreignkey when current object id is contained in another table
     /// </summary>
     [AttributeUsage(AttributeTargets.Property)]
-    public class DbLoadNestedList : Attribute
+    public class DbLoadNestedObject : Attribute
     {
         public readonly Type ChildType;
         public readonly string ChildForeignKeyProperty;
@@ -74,7 +85,7 @@ namespace OpenOrm
         /// <param name="remote_type">Type of model that is the nested object in current model</param>
         /// <param name="remote_property_primary_key_name">Primary key (property name) of nested object (Id, Code, ...)</param>
         /// <param name="target_property_name">Target property name of current model that receive the loaded nested object</param>
-        public DbLoadNestedList(Type child_type, string child_foreign_key_property_name, string parent_primary_key_property_name = "Id", bool auto_load = true)
+        public DbLoadNestedObject(Type child_type, string child_foreign_key_property_name, string parent_primary_key_property_name = "Id", bool auto_load = true)
         {
             this.ChildType = child_type;
             this.ChildForeignKeyProperty = child_foreign_key_property_name;
@@ -88,7 +99,7 @@ namespace OpenOrm
         /// <param name="remote_type">Type of model that is the nested object in current model</param>
         /// <param name="remote_property_primary_key_name">Primary key (property name) of nested object (Id, Code, ...)</param>
         /// <param name="target_property_name">Target property name of current model that receive the loaded nested object</param>
-        public DbLoadNestedList(Type child_type, string child_foreign_key_property_name, string parent_primary_key_property_name, string child_property_to_get, bool auto_load = true)
+        public DbLoadNestedObject(Type child_type, string child_foreign_key_property_name, string parent_primary_key_property_name, string child_property_to_get, bool auto_load = true)
         {
             this.ChildType = child_type;
             this.ChildForeignKeyProperty = child_foreign_key_property_name;
