@@ -87,7 +87,7 @@ db.Update(o);
 db.Delete(o);
 ```
 
-## Atttributes
+## Attributes
 
 You can use some attributes to personalize the result in database
 
@@ -120,7 +120,7 @@ You can use some attributes to personalize the result in database
         [DbLoadNestedList(child_type: typeof(UserConfig), child_foreign_key_property_name:  "UserId", parent_primary_key_property_name: "Id", auto_load: true)]
         public List<UserConfig> UserConfigs { get; set; }
         
-        //Define a column as not null with false as default value
+        //Define a column as not null with "test" as default value
         //Then you can juste insert new object without having to set property value
         [DbNotNull("test")]
         public string TestString { get; set; }
