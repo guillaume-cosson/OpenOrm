@@ -282,6 +282,7 @@ namespace OpenOrm.SqlProvider.Shared
                 List<string> parameters = new List<string>();
                 foreach (object item in rawValue.GetEnumerable())
                 {
+                    if (item == null) continue;
                     string paramName = $"@p{Parameters.Count}";
                     parameters.Add(paramName);
                     Parameters.Add(new SqlParameterItem { Name = paramName, Value = item, SqlDbType = OpenOrmTools.ToSqlDbType(item.GetType()) });
