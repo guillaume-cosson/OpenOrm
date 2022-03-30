@@ -101,7 +101,6 @@ namespace OpenOrm.SqlProvider.MySql
 
             sql += ");";
 
-            Console.WriteLine(sql);
             SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
 
             //Create default index for the table
