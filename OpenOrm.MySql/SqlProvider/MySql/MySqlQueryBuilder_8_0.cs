@@ -35,6 +35,17 @@ namespace OpenOrm.SqlProvider.MySql
             List<string> colNames = new List<string>();
             TableDefinition td = TableDefinition.Get(modelType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
 
+            if(cnx.Configuration.PutIdFieldAtFirstPosition)
+            {
+                var idColumn = td.Columns.FindIndex(c => c.Name.Equals("id", StringComparison.CurrentCultureIgnoreCase));
+                if(idColumn != -1)
+                {
+                    var item = td.Columns[idColumn];
+                    td.Columns.RemoveAt(idColumn);
+                    td.Columns.Insert(0, item);
+                }
+            }
+
             string sql = $"CREATE TABLE `{GetTableName(modelType)}` (";
 
             foreach (ColumnDefinition cd in td.Columns)
