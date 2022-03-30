@@ -6,6 +6,7 @@ using OpenOrm.SqlProvider.Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Linq.Expressions;
@@ -96,7 +97,7 @@ namespace OpenOrm.SqlProvider.MySql
             var foreigns = td.Columns.Where(x => x.IsForeignKey);
             foreach(var foreign in foreigns)
             {
-                sql += $" , FOREIGN KEY (`{foreign.Name}`) REFERENCES `{OpenOrmTools.GetTableName(foreign.ForeignType)}` (`{foreign.ParentForeignKeyProperty}`)";
+                sql += $" , FOREIGN KEY (`{foreign.Name}`) REFERENCES `{OpenOrmTools.GetTableName(foreign.ForeignType)}` (`{foreign.ParentForeignKeyProperty}`) ON UPDATE {OpenOrmTools.GetDescription(foreign.ForeignOnUpdate)} ON DELETE {OpenOrmTools.GetDescription(foreign.ForeignOnDelete)}";
             }
 
             sql += ");";
