@@ -93,8 +93,15 @@ namespace OpenOrm.SqlProvider.MySql
                 sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
             }
 
+            var foreigns = td.Columns.Where(x => x.IsForeignKey);
+            foreach(var foreign in foreigns)
+            {
+                sql += $" , FOREIGN KEY (`{foreign.Name}`) REFERENCES `{OpenOrmTools.GetTableName(foreign.ForeignType)}` (`{foreign.ParentForeignKeyProperty}`)";
+            }
+
             sql += ");";
 
+            Console.WriteLine(sql);
             SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
 
             //Create default index for the table
