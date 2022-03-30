@@ -20,6 +20,9 @@ namespace OpenOrm.SqlProvider.Shared
         OpenOrmDbConnection _cnx;
         ISqlConnector CurrentConnector;
 
+        public delegate void QueryDelegate(string command);
+        public static event QueryDelegate OnSqlQuery;
+
         private string _storedProcedure;
         public string StoredProcedure
         {
@@ -165,7 +168,7 @@ namespace OpenOrm.SqlProvider.Shared
             }
 
             //if (cnx.Configuration.PrintSqlQueries) System.Diagnostics.Debug.WriteLine(GetSql(cnx.Configuration.Connector, command));
-
+            OnSqlQuery?.Invoke(command);
             CurrentConnector.ExecuteSql(cnx, command);
 
             ClearParameters();
