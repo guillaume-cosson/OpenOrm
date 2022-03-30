@@ -74,6 +74,8 @@ namespace OpenOrm.Schema
         public Type ForeignType { get; set; }
         public string ForeignChildTargetProperty { get; set; }
         public string ParentForeignKeyProperty { get; set; }
+        public ForeignReference ForeignOnDelete { get; set; }
+        public ForeignReference ForeignOnUpdate { get; set; }
         public bool ForeignAutoLoad;
         public PropertyInfo PropertyInfo { get; set; }
         public TableDefinition TableDefinition { get; set; }
@@ -122,6 +124,8 @@ namespace OpenOrm.Schema
                 ForeignChildTargetProperty = cached.ForeignChildTargetProperty;
                 ParentForeignKeyProperty = cached.ParentForeignKeyProperty;
                 ForeignAutoLoad = cached.ForeignAutoLoad;
+                ForeignOnDelete = cached.ForeignOnDelete;
+                ForeignOnUpdate = cached.ForeignOnUpdate;
             }
             else
             {
@@ -245,6 +249,8 @@ namespace OpenOrm.Schema
                     ForeignChildTargetProperty = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.ChildTargetProperty);
                     ParentForeignKeyProperty = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.ParentPrimaryKeyProperty);
                     ForeignAutoLoad = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.AutoLoad);
+                    ForeignOnDelete = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.OnDelete);
+                    ForeignOnUpdate = pi.GetPropertyAttributeValue((DbForeignKey attr) => attr.OnUpdate);
                 }
 
                 if (IsNotNullColumn)
