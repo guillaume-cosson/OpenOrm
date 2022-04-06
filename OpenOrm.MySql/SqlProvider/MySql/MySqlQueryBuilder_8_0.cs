@@ -6,6 +6,7 @@ using OpenOrm.SqlProvider.Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Linq.Expressions;
@@ -34,6 +35,17 @@ namespace OpenOrm.SqlProvider.MySql
             List<string> columns = new List<string>();
             List<string> colNames = new List<string>();
             TableDefinition td = TableDefinition.Get(modelType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+
+            if(cnx.Configuration.PutIdFieldAtFirstPosition)
+            {
+                var idColumn = td.Columns.FindIndex(c => c.Name.Equals("id", StringComparison.CurrentCultureIgnoreCase));
+                if(idColumn != -1)
+                {
+                    var item = td.Columns[idColumn];
+                    td.Columns.RemoveAt(idColumn);
+                    td.Columns.Insert(0, item);
+                }
+            }
 
             string sql = $"CREATE TABLE `{GetTableName(modelType)}` (";
 
@@ -80,6 +92,12 @@ namespace OpenOrm.SqlProvider.MySql
             if(td.Columns.Where(x => x.IsPrimaryKey).Count() > 1)
             {
                 sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
+            }
+
+            var foreigns = td.Columns.Where(x => x.IsForeignKey);
+            foreach(var foreign in foreigns)
+            {
+                sql += $" , FOREIGN KEY (`{foreign.Name}`) REFERENCES `{OpenOrmTools.GetTableName(foreign.ForeignType)}` (`{foreign.ParentForeignKeyProperty}`) ON UPDATE {OpenOrmTools.GetDescription(foreign.ForeignOnUpdate)} ON DELETE {OpenOrmTools.GetDescription(foreign.ForeignOnDelete)}";
             }
 
             sql += ");";

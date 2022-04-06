@@ -1,9 +1,49 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text;
 
 namespace OpenOrm
 {
+    public enum ForeignReference
+    {
+        /// <summary>
+        /// The foreign reference action was not found.
+        /// </summary>
+        [Description("NONE")]
+        None = 0,
+
+        /// <summary>
+        /// Foreign reference is RESTRICT.
+        /// </summary>
+        [Description("RESTRICT")]
+        Restrict = 1,
+
+        /// <summary>
+        /// Foreign reference is CASCADE.
+        /// </summary>
+        [Description("CASCADE")]
+        Cascade = 2,
+
+        /// <summary>
+        /// Foreign reference is SET NULL.
+        /// </summary>
+        [Description("SET NULL")]
+        SetNull = 3,
+
+        /// <summary>
+        /// Foreign reference is NO ACTION.
+        /// </summary>
+        [Description("NO ACTION")]
+        NoAction = 4,
+
+        /// <summary>
+        /// Foreign reference is SET DEFAULT.
+        /// </summary>
+        [Description("SET DEFAULT")]
+        SetDefault = 5,
+    }
+
     [AttributeUsage(AttributeTargets.Property)]
     public class DbPrimaryKey : Attribute
     {
@@ -42,6 +82,8 @@ namespace OpenOrm
         public readonly string ParentPrimaryKeyProperty;
         public readonly string ChildTargetProperty;
         public readonly bool AutoLoad;
+        public readonly ForeignReference OnDelete;
+        public readonly ForeignReference OnUpdate;
 
         /// <summary>
         /// Auto map nested object by foreignkey
@@ -49,12 +91,14 @@ namespace OpenOrm
         /// <param name="remote_type">Type of model that is the nested object in current model</param>
         /// <param name="remote_property_primary_key_name">Primary key (property name) of nested object (Id, Code, ...)</param>
         /// <param name="target_property_name">Target property name of current model that receive the loaded nested object</param>
-        public DbForeignKey(Type parent_type, string parent_property_primary_key_name = "Id", string target_property_name = "", bool auto_load = true)
+        public DbForeignKey(Type parent_type, string parent_property_primary_key_name = "Id", string target_property_name = "", bool auto_load = true, ForeignReference on_delete = ForeignReference.NoAction, ForeignReference on_update = ForeignReference.NoAction)
         {
             this.ParentType = parent_type;
             this.ParentPrimaryKeyProperty = parent_property_primary_key_name;
             this.ChildTargetProperty = target_property_name;
             this.AutoLoad = auto_load && !string.IsNullOrEmpty(target_property_name);
+            this.OnDelete = on_delete;
+            this.OnUpdate = on_update;
         }
     }
 
