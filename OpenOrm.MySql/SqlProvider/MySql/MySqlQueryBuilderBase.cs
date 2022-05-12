@@ -594,7 +594,6 @@ namespace OpenOrm.SqlProvider.MySql
             }
 
             string sql = $"DELETE FROM `{GetTableName<T>()}` WHERE {string.Join(" AND ", keyFields)};";
-            Console.WriteLine(sql);
 
             SqlQuery sq = new SqlQuery();
             sq.ExecuteSql(cnx, sql, parameters);
