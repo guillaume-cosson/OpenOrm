@@ -588,11 +588,13 @@ namespace OpenOrm.SqlProvider.MySql
                     string paramName = $"@p{parameters.Count}";
                     keyFields.Add($"`{cd.Name}`={paramName}");
                     parameters.Add(new SqlParameterItem { Name = paramName, Value = value });
+                    
+                    if (td.PrimaryKeysCount == 1) break;
                 }
-                if (td.PrimaryKeysCount == 1) break;
             }
 
             string sql = $"DELETE FROM `{GetTableName<T>()}` WHERE {string.Join(" AND ", keyFields)};";
+            Console.WriteLine(sql);
 
             SqlQuery sq = new SqlQuery();
             sq.ExecuteSql(cnx, sql, parameters);
