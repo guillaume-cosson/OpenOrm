@@ -83,7 +83,7 @@ namespace OpenOrm.SqlProvider.MySql
             string fields = string.Join(",", columns);
             sql += fields;
 
-            if (td.Columns.Where(x => x.IsPrimaryKey).Count() > 1)
+            if (td.Columns.Count(x => x.IsPrimaryKey) > 1)
             {
                 sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
             }

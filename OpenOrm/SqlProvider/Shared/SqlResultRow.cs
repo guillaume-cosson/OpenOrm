@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using OpenOrm.Extensions;
 
 namespace OpenOrm.SqlProvider.Shared
 {
@@ -110,7 +111,7 @@ namespace OpenOrm.SqlProvider.Shared
                         }
                         else
                         {
-                            cd.PropertyInfo.SetValue(oResult, Convert.ChangeType(Row[cd.Name], cd.PropertyType), null);
+                            cd.PropertyInfo.SetValue(oResult, Convert.ChangeType(Row[cd.Name], cd.PropertyType.GetBaseType()), null);
                         }
                     }
                 }
@@ -164,7 +165,7 @@ namespace OpenOrm.SqlProvider.Shared
                         }
                         else
                         {
-                            cd.PropertyInfo.SetValue(oResult, Convert.ChangeType(Row[cd.Name], cd.PropertyType), null);
+                            cd.PropertyInfo.SetValue(oResult, Convert.ChangeType(Row[cd.Name], cd.PropertyType.GetBaseType()), null);
                         }
                     }
                 }
