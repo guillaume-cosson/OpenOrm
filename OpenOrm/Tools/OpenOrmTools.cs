@@ -444,6 +444,10 @@ namespace OpenOrm
 			{
 				return SqlDbType.UniqueIdentifier;
 			}
+			else if(t.IsEnum)
+            {
+				return SqlDbType.BigInt;
+            }
 
 			return SqlDbType.NVarChar;
 		}
