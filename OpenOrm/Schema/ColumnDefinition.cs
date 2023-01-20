@@ -115,6 +115,7 @@ namespace OpenOrm.Schema
                 IsNestedProperty = cached.IsNestedProperty;
                 NestedChildForeignKeyProperty = cached.NestedChildForeignKeyProperty;
                 NestedChildForeignKeyPropertyType = cached.NestedChildForeignKeyPropertyType;
+                NestedChildType = cached.NestedChildType;
                 NestedParentPrimaryKeyProperty = cached.NestedParentPrimaryKeyProperty;
                 NestedParentPrimaryKeyPropertyType = cached.NestedParentPrimaryKeyPropertyType;
                 NestedChildPropertyToGet = cached.NestedChildPropertyToGet;
@@ -166,6 +167,7 @@ namespace OpenOrm.Schema
                 IsNestedProperty = cached.IsNestedProperty;
                 NestedChildForeignKeyProperty = cached.NestedChildForeignKeyProperty;
                 NestedChildForeignKeyPropertyType = cached.NestedChildForeignKeyPropertyType;
+                NestedChildType = cached.NestedChildType;
                 NestedParentPrimaryKeyProperty = cached.NestedParentPrimaryKeyProperty;
                 NestedParentPrimaryKeyPropertyType = cached.NestedParentPrimaryKeyPropertyType;
                 NestedChildPropertyToGet = cached.NestedChildPropertyToGet;

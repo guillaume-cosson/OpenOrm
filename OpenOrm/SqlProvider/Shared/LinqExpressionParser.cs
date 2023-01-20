@@ -226,19 +226,34 @@ namespace OpenOrm.SqlProvider.Shared
             {
                 string paramName = $"@p{Parameters.Count}";
                 result += GetContainsSqlString(RecurseExp(methodCall.Object, td), paramName, exptype);
-                Parameters.Add(new SqlParameterItem { Name = paramName, Value = GetContainsFormatedValue(RecurseExp(methodCall.Arguments[0], td, ParserOptions.NO_PARAMETER)), SqlDbType = System.Data.SqlDbType.NVarChar });
+
+                string paramValue = GetContainsFormatedValue(RecurseExp(methodCall.Arguments[0], td, ParserOptions.NO_PARAMETER));
+                if (!Parameters.Any(x => x.Name == paramName))
+                {
+                    Parameters.Add(new SqlParameterItem { Name = paramName, Value = paramValue, SqlDbType = System.Data.SqlDbType.NVarChar });
+                }
             }
             else if (methodCall.Method == typeof(string).GetMethod("StartsWith", new[] { typeof(string) }))
             {
                 string paramName = $"@p{Parameters.Count}";
                 result += GetStartsWithSqlString(RecurseExp(methodCall.Object, td), paramName, exptype);
-                Parameters.Add(new SqlParameterItem { Name = paramName, Value = GetStartsWithFormatedValue(RecurseExp(methodCall.Arguments[0], td, ParserOptions.NO_PARAMETER)), SqlDbType = System.Data.SqlDbType.NVarChar });
+
+                string paramValue = GetStartsWithFormatedValue(RecurseExp(methodCall.Arguments[0], td, ParserOptions.NO_PARAMETER));
+                if (!Parameters.Any(x => x.Name == paramName))
+                {
+                    Parameters.Add(new SqlParameterItem { Name = paramName, Value = paramValue, SqlDbType = System.Data.SqlDbType.NVarChar });
+                }
             }
             else if (methodCall.Method == typeof(string).GetMethod("EndsWith", new[] { typeof(string) }))
             {
                 string paramName = $"@p{Parameters.Count}";
                 result += GetEndsWithSqlString(RecurseExp(methodCall.Object, td), paramName, exptype);
-                Parameters.Add(new SqlParameterItem { Name = paramName, Value = GetEndsWithFormatedValue(RecurseExp(methodCall.Arguments[0], td, ParserOptions.NO_PARAMETER)), SqlDbType = System.Data.SqlDbType.NVarChar });
+
+                string paramValue = GetEndsWithFormatedValue(RecurseExp(methodCall.Arguments[0], td, ParserOptions.NO_PARAMETER));
+                if (!Parameters.Any(x => x.Name == paramName))
+                {
+                    Parameters.Add(new SqlParameterItem { Name = paramName, Value = paramValue, SqlDbType = System.Data.SqlDbType.NVarChar });
+                }
             }
             else if (methodCall.Method.Name == "IsNullOrEmpty")
             {
