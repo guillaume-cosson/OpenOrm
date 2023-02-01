@@ -39,6 +39,7 @@ namespace OpenOrm.SqlProvider.SqlServer
                         formattedValue = value.ToString().Replace(".", decsep).Replace(",", decsep);
                         break;
                     case "datetime":
+                        if (((DateTime)value).Year == 1) return "NULL";
                         string ShortDatePattern = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
                         string LongTimePattern = CultureInfo.CurrentCulture.DateTimeFormat.LongTimePattern;
                         formattedValue = $"'{((DateTime)value).ToString($"{ShortDatePattern} {LongTimePattern}")}'";
