@@ -4,9 +4,9 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <AssemblyVersion>0.3.6.0</AssemblyVersion>
-    <FileVersion>0.3.6.0</FileVersion>
-    <Version>0.3.5</Version>
+    <AssemblyVersion>0.3.7.0</AssemblyVersion>
+    <FileVersion>0.3.7.0</FileVersion>
+    <Version>0.3.7</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>OpenOrm is a light weight open source micro Orm.
 It works with SqlServer, SQLite and MySql databases for now.
@@ -16,7 +16,7 @@ Keep in mind OpenOrm is still a "Work in progress" project.</Description>
     <PackageProjectUrl>https://github.com/guillaume-cosson/OpenOrm</PackageProjectUrl>
     <RepositoryUrl>https://github.com/guillaume-cosson/OpenOrm</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Copyright>2022 Guillaume Cosson</Copyright>
+    <Copyright>2023 Guillaume Cosson</Copyright>
     <Configurations>Debug;Release;x64</Configurations>
     <PackageIcon>openorm.png</PackageIcon>
     <PackageIconUrl />
