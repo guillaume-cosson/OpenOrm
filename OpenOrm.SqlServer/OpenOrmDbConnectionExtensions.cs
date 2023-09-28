@@ -542,7 +542,7 @@ namespace OpenOrm.SqlServer
             List<DbModel> dbmodels = OpenOrmTools.GetEnumerableOfType<DbModel>().ToList();
             List<object> modelsWithAttribute = OpenOrmTools.GetEnumerableOfTypeFromEntryAssemblyWithAttribute<DbModelAttribute>().ToList();
             List<TableDefinition> models = dbmodels.Select(x => new TableDefinition(x.GetType(), db)).ToList();
-            
+
             //foreach(object o in modelsWithAttribute)
             //{
             //    Type t = o.GetType();
@@ -553,7 +553,14 @@ namespace OpenOrm.SqlServer
             //        models.Add(td);
             //    }
             //}
-            
+
+            if (db.Configuration.UseDatabaseSchema && !DbDefinition.Definitions.ContainsKey(db.ConnectionString))
+            {
+                var tds = db.GetTablesDefinitionsFromDb();
+                DbDefinition.SetDbDefinition(db.ConnectionString, tds);
+                TableDefinition.DbDefinitionChanged(db.ConnectionString);
+            }
+
             models.AddRange(modelsWithAttribute.Select(x => new TableDefinition(x.GetType(), db)));
             models = models.Distinct(x => x.TableName).ToList();
 

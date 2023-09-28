@@ -469,16 +469,12 @@ namespace OpenOrm.MySql
             List<object> modelsWithAttribute = OpenOrmTools.GetEnumerableOfTypeFromEntryAssemblyWithAttribute<DbModelAttribute>().ToList();
             List<TableDefinition> models = dbmodels.Select(x => new TableDefinition(x.GetType(), db)).ToList();
 
-            //foreach(object o in modelsWithAttribute)
-            //{
-            //    Type t = o.GetType();
-            //    TableDefinition td = new TableDefinition(t);
-
-            //    if(!models.Any(x => x.TableName == td.TableName))
-            //    {
-            //        models.Add(td);
-            //    }
-            //}
+            if (db.Configuration.UseDatabaseSchema && !DbDefinition.Definitions.ContainsKey(db.ConnectionString))
+            {
+                var tds = db.GetTablesDefinitionsFromDb();
+                DbDefinition.SetDbDefinition(db.ConnectionString, tds);
+                TableDefinition.DbDefinitionChanged(db.ConnectionString);
+            }
 
             models.AddRange(modelsWithAttribute.Select(x => new TableDefinition(x.GetType(), db)));
             models = models.Distinct(x => x.TableName).ToList();

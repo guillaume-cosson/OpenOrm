@@ -467,65 +467,15 @@ namespace OpenOrm.SQLite
             List<object> modelsWithAttribute = OpenOrmTools.GetEnumerableOfTypeFromEntryAssemblyWithAttribute<DbModelAttribute>().ToList();
             List<TableDefinition> models = dbmodels.Select(x => new TableDefinition(x.GetType(), db)).ToList();
 
-            //foreach(object o in modelsWithAttribute)
-            //{
-            //    Type t = o.GetType();
-            //    TableDefinition td = new TableDefinition(t);
-
-            //    if(!models.Any(x => x.TableName == td.TableName))
-            //    {
-            //        models.Add(td);
-            //    }
-            //}
+            if (db.Configuration.UseDatabaseSchema && !DbDefinition.Definitions.ContainsKey(db.ConnectionString))
+            {
+                var tds = db.GetTablesDefinitionsFromDb();
+                DbDefinition.SetDbDefinition(db.ConnectionString, tds);
+                TableDefinition.DbDefinitionChanged(db.ConnectionString);
+            }
 
             models.AddRange(modelsWithAttribute.Select(x => new TableDefinition(x.GetType(), db)));
             models = models.Distinct(x => x.TableName).ToList();
-
-            //foreach(var td in models)
-            //{
-            //    Type modelType = td.ModelType;
-
-            //    //Création table (model existant mais table inexistante)
-            //    if (db.Configuration.AutomaticMigrationAllowCreateTable && !db.TableExists(td.TableName))
-            //    {
-            //        db.CreateTable(modelType);
-            //    }
-
-            //    bool tableExists = db.TableExists(td.TableName);
-
-            //    //Création colonne (dans le model mais pas dans la base)
-            //    if (tableExists && db.Configuration.AutomaticMigrationAllowCreateColumn)
-            //    {
-            //        foreach (ColumnDefinition cd in td.Columns)
-            //        {
-            //            if (!db.ColumnExists(modelType, cd.Name))
-            //            {
-            //                db.AddColumn(modelType, cd);
-            //            }
-            //        }
-            //    }
-
-            //    if (tableExists && db.Configuration.AutomaticMigrationAllowUpdateColumn)
-            //    {
-
-            //    }
-
-            //    if (tableExists && db.Configuration.AutomaticMigrationAllowDropColumn)
-            //    {
-            //        TableDefinition t_db = models.FirstOrDefault(x => x.TableName == td.TableName);
-
-            //        if (t_db != null)
-            //        {
-            //            foreach (var cd_db in t_db.Columns)
-            //            {
-            //                if (!td.Columns.Any(x => x.Name == cd_db.Name))
-            //                {
-            //                    db.DropColumn(modelType, cd_db.Name);
-            //                }
-            //            }
-            //        }
-            //    }
-            //}
 
             List<TableDefinition> tables = db.GetTablesDefinitionsFromDb();
 

@@ -109,7 +109,10 @@ namespace OpenOrm.Schema
 				TableName = OpenOrmTools.GetTableName(t);
 				ModelType = t;
 
-                TableDefinition td_temp = DbDefinition.Definitions[cnx.ConnectionString].FirstOrDefault(x => x.TableName.ToLower() == TableName.ToLower());
+                TableDefinition td_temp = 
+					DbDefinition.Definitions.ContainsKey(cnx.ConnectionString) ? 
+					DbDefinition.Definitions[cnx.ConnectionString].FirstOrDefault(x => x.TableName.ToLower() == TableName.ToLower()) 
+					: null;
 
                 ExistsInDb = td_temp != null;
 
