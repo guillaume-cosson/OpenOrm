@@ -1,4 +1,5 @@
-﻿using OpenOrm.Schema;
+﻿using OpenOrm.Configuration;
+using OpenOrm.Schema;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,15 +11,18 @@ namespace OpenOrm.SqlProvider.Shared
     {
         public List<SqlResultRow> Rows;
         private int _currentIndex = 0;
+        private OpenOrmDbConnection cnx;
 
-        public SqlResult()
+        public SqlResult(OpenOrmDbConnection _cnx)
         {
             Rows = new List<SqlResultRow>();
+            cnx = _cnx;
         }
 
-        public SqlResult(int size)
+        public SqlResult(OpenOrmDbConnection _cnx, int size)
         {
             Rows = new List<SqlResultRow>(size);
+            cnx = _cnx;
         }
 
         public void AddRow(SqlResultRow srr)
@@ -167,12 +171,12 @@ namespace OpenOrm.SqlProvider.Shared
             if (index >= 0)
             {
                 if (Rows.Count > index)
-                    return Rows[index].ToObject<T>();
+                    return Rows[index].ToObject<T>(cnx);
                 else return default(T);
             }
-            else if (Rows.Count >= 1)
+            else if (Rows.Any())
             {
-                return Rows[0].ToObject<T>();
+                return Rows[0].ToObject<T>(cnx);
             }
             else
             {
@@ -184,7 +188,7 @@ namespace OpenOrm.SqlProvider.Shared
         {
             if (Rows.Count >= 1)
             {
-                return Rows[0].ToObject(t);
+                return Rows[0].ToObject(t, cnx);
             }
             else
             {
@@ -197,12 +201,12 @@ namespace OpenOrm.SqlProvider.Shared
             if (index >= 0)
             {
                 if (Rows.Count > index)
-                    return Rows[index].ToObject<T>();
+                    return Rows[index].ToObject<T>(cnx);
                 else return default(T);
             }
             else if (Rows.Count >= 1)
             {
-                return Rows[Rows.Count - 1].ToObject<T>();
+                return Rows[Rows.Count - 1].ToObject<T>(cnx);
             }
             else
             {
@@ -213,11 +217,11 @@ namespace OpenOrm.SqlProvider.Shared
         public List<T> ToObjectList<T>()
         {
             List<T> lstResult = new List<T>(Rows.Count);
-            TableDefinition td = TableDefinition.Get<T>();
+            TableDefinition td = TableDefinition.Get<T>(cnx);
 
             for (int i = 0; i < Rows.Count; i++)
             {
-                lstResult.Add(Rows[i].ToObject<T>(td));
+                lstResult.Add(Rows[i].ToObject<T>(cnx, td));
             }
 
             return lstResult;
@@ -226,11 +230,11 @@ namespace OpenOrm.SqlProvider.Shared
         public List<object> ToObjectList(Type t)
         {
             List<object> lstResult = new List<object>(Rows.Count);
-            TableDefinition td = TableDefinition.Get(t);
+            TableDefinition td = TableDefinition.Get(t, cnx);
 
             for (int i = 0; i < Rows.Count; i++)
             {
-                lstResult.Add(Rows[i].ToObject(t, td));
+                lstResult.Add(Rows[i].ToObject(t, cnx, td));
             }
 
             return lstResult;

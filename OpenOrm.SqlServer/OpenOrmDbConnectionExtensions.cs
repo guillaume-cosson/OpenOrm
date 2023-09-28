@@ -10,7 +10,8 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
-using OpenOrm.SqlServer.Schema;
+//using OpenOrm.SqlServer.Schema;
+using System.Reflection;
 
 namespace OpenOrm.SqlServer
 {
@@ -31,7 +32,7 @@ namespace OpenOrm.SqlServer
             //    SqlServerDbDefinition.InitDbDefinition(cnx);
             //}
 
-            return new SqlServerQueryBuilder(cnx.Configuration);
+            return new SqlServerQueryBuilder(cnx);
         }
 
         public static OpenOrmDbConnection CreateConnection(OpenOrmConfiguration config)
@@ -110,10 +111,10 @@ namespace OpenOrm.SqlServer
         //    return GetQueryBuilder(cnx).ListTables(cnx);
         //}
 
-        //public static List<TableDefinition> GetTablesDefinitions(this OpenOrmDbConnection cnx)
-        //{
-        //    return GetQueryBuilder(cnx).GetTablesDefinitions(cnx);
-        //}
+        public static List<TableDefinition> GetTablesDefinitionsFromDb(this OpenOrmDbConnection cnx)
+        {
+            return GetQueryBuilder(cnx).GetTablesDefinitionsFromDb(cnx);
+        }
 
         #region Async
         public static async Task<bool> TableExistsAsync<T>(this OpenOrmDbConnection cnx)
@@ -424,7 +425,7 @@ namespace OpenOrm.SqlServer
             if (models != null && models.Any())
             {
                 ISqlQueryBuilder builder = GetQueryBuilder(cnx);
-                TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                TableDefinition td = TableDefinition.Get<T>(cnx);
                 bool useTransaction = cnx.Transaction == null;
 
                 try
@@ -473,7 +474,7 @@ namespace OpenOrm.SqlServer
             if (models != null && models.Any())
             {
                 ISqlQueryBuilder builder = GetQueryBuilder(cnx);
-                TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                TableDefinition td = TableDefinition.Get<T>(cnx);
                 bool useTransaction = cnx.Transaction == null;
 
                 try
@@ -530,42 +531,110 @@ namespace OpenOrm.SqlServer
         #endregion
 
         #region Migration
-        ///// <summary>
-        ///// Automatic add columns to tables if properties are added to class that inherit from DbModel
-        ///// </summary>
-        ///// <param name="db"></param>
-        //public static void AutomaticMigration(OpenOrmDbConnection db)
-        //{
-        //    List<DbModel> dbmodels = OpenOrmTools.GetEnumerableOfType<DbModel>().ToList();
+        /// <summary>
+        /// Automatic add columns to tables if properties are added to class that inherit from DbModel
+        /// </summary>
+        /// <param name="db"></param>
+        public static void AutomaticMigration(OpenOrmDbConnection db)
+        {
+            //TODO: Log auto migration actions in migration table
 
-        //    foreach(DbModel model in dbmodels)
-        //    {
-        //        Type modelType = model.GetType();
-        //        bool tableExists = db.TableExists(modelType.Name);
-        //        if (!tableExists)
-        //        {
-        //            db.CreateTable(modelType);
-        //        }
-        //        else
-        //        {
-        //            List<PropertyInfo> property_infos = OpenOrmTools.GetFields(modelType);
+            List<DbModel> dbmodels = OpenOrmTools.GetEnumerableOfType<DbModel>().ToList();
+            List<object> modelsWithAttribute = OpenOrmTools.GetEnumerableOfTypeFromEntryAssemblyWithAttribute<DbModelAttribute>().ToList();
+            List<TableDefinition> models = dbmodels.Select(x => new TableDefinition(x.GetType(), db)).ToList();
+            
+            //foreach(object o in modelsWithAttribute)
+            //{
+            //    Type t = o.GetType();
+            //    TableDefinition td = new TableDefinition(t);
 
-        //            foreach (PropertyInfo pi in property_infos)
-        //            {
-        //                if(!db.ColumnExists(modelType, pi.Name))
-        //                {
-        //                    ColumnDefinition field = new ColumnDefinition(pi);
-        //                    db.AddColumn(modelType, field);
-        //                }
-        //            }
-        //        }
-        //    }
-        //}
+            //    if(!models.Any(x => x.TableName == td.TableName))
+            //    {
+            //        models.Add(td);
+            //    }
+            //}
+            
+            models.AddRange(modelsWithAttribute.Select(x => new TableDefinition(x.GetType(), db)));
+            models = models.Distinct(x => x.TableName).ToList();
+
+            List<TableDefinition> tables = db.GetTablesDefinitionsFromDb();
+
+            foreach (TableDefinition td in models)
+            {
+                Type modelType = td.ModelType;
+
+                if (td.TableName == "OpenOrmMigration")
+                {
+                    continue;
+                }
+
+                //Création table (model existant mais table inexistante)
+                if (db.Configuration.AutomaticMigrationAllowCreateTable && !db.TableExists(td.TableName))
+                {
+					db.CreateTable(modelType);
+				}
+
+                bool tableExists = db.TableExists(td.TableName);
+
+                //Création colonne (dans le model mais pas dans la base)
+                if (tableExists && db.Configuration.AutomaticMigrationAllowCreateColumn)
+                {
+                    foreach(ColumnDefinition cd in td.Columns)
+                    {
+                        if (!db.ColumnExists(modelType, cd.Name))
+                        {
+                            db.AddColumn(modelType, cd);
+                        }
+                    }
+                }
+
+                if(tableExists && db.Configuration.AutomaticMigrationAllowUpdateColumn)
+                {
+                    
+                }
+
+				if (tableExists && db.Configuration.AutomaticMigrationAllowDropColumn)
+				{
+                    TableDefinition t_db = tables.FirstOrDefault(x => x.TableName == td.TableName);
+
+                    if(t_db != null)
+                    {
+                        foreach(var cd_db in t_db.Columns)
+                        {
+                            if(!td.Columns.Any(x => x.Name == cd_db.Name))
+                            {
+                                db.DropColumn(modelType, cd_db.Name);
+                            }
+                        }
+                    }
+				}
+			}
+
+			//Suppression des tables qui ne sont plus représentées par des models
+			if (db.Configuration.AutomaticMigrationAllowDropTable && models.Any())
+			{
+				//var tables = [get tables in database]
+                foreach(var table in tables)
+                {
+                    if(table.TableName == "OpenOrmMigration")
+                    {
+                        continue;
+                    }
+
+                    bool tableFound = models.Any(x => x.TableName == table.TableName);
+
+                    if(!tableFound)
+                    {
+                        db.DropTable(table.TableName);
+                    }
+                }
+            }
+		}
 
         public static void Migrate(this OpenOrmDbConnection db, string specificVersion = "")
         {
-            //if (db.Configuration.EnableAutomaticMigration)
-            //    AutomaticMigration(db);
+            if (db.Configuration.EnableAutomaticMigration)
+                AutomaticMigration(db);
 
             if (db.Configuration.EnableRamCache) CoreTools.RamCache.InvalidateAll();
 
@@ -590,7 +659,7 @@ namespace OpenOrm.SqlServer
 
             if (!string.IsNullOrEmpty(specificVersion))
             {
-                System.Data.IDbTransaction transac = null;
+                System.Data.IDbTransaction transac = db.BeginTransaction();
                 try
                 {
                     //Logger.System("Downgrade vers la version " + downgradeToVersion);
@@ -603,12 +672,12 @@ namespace OpenOrm.SqlServer
                         if(m.Version.CompareVersions(specificVersion) == 1 /*&& currentVersion.CompareVersion(m.Version) >= 0*/)
                         {
                             //Logger.System("Downgrade de la version " + m.Version);
-                            transac = db.BeginTransaction();
+                            //transac = db.BeginTransaction();
                             m.Down(db);
                             db.Delete<OpenOrmMigration>(x => x.Version == m.Version);
                             ExistingMigrations = ExistingMigrations.Where(x => x.Version != m.Version).ToList();
                             currentVersion = ExistingMigrations.Count > 0 ? ExistingMigrations.Where(x => !string.IsNullOrEmpty(x.Version)).Select(x => x.Version).OrderBy(x => x.PadNumbers()).Last() : "";
-                            db.CommitTransaction();
+                            //db.CommitTransaction();
                             //transac.Commit();
                         }
 
@@ -624,15 +693,17 @@ namespace OpenOrm.SqlServer
                         if (m.Version.CompareVersions(specificVersion) <= 0 && m.Version.CompareVersions(currentVersion) == 1)
                         {
                             //Logger.System("Downgrade de la version " + m.Version);
-                            transac = db.BeginTransaction();
+                            
                             m.Up(db);
                             db.Insert(m);
                             currentVersion = m.Version;
-                            db.CommitTransaction();
+                            
                         }
 
                         if (m.Version.CompareVersions(specificVersion) >= 0) break;
                     }
+
+                    db.CommitTransaction();
                 }
                 catch (Exception)
                 {
@@ -642,21 +713,23 @@ namespace OpenOrm.SqlServer
             }
             else
             {
-                System.Data.IDbTransaction transac = null;
+                System.Data.IDbTransaction transac = db.BeginTransaction();
                 try
                 {
                     foreach (OpenOrmMigration m in migrations)
                     {
                         if (m.Version.CompareVersions(currentVersion) == 1)
                         {
-                            transac = db.BeginTransaction();
+                            //transac = db.BeginTransaction();
                             //Logger.System("Upgrade vers la version " + m.Version);
                             m.Up(db);
                             db.Insert(m);
                             currentVersion = m.Version;
-                            db.CommitTransaction();
+                            
                         }
                     }
+
+                    db.CommitTransaction();
                 }
                 catch (Exception e)
                 {

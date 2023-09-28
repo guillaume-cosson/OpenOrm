@@ -1,4 +1,4 @@
-using MySql.Data.MySqlClient;
+//using MySql.Data.MySqlClient;
 using OpenOrm;
 using OpenOrm.MySql;
 using OpenOrm.Schema;
@@ -8,6 +8,9 @@ using System.Linq;
 using Xunit;
 using Xunit.Extensions.Ordering;
 using XUnitTests.Models;
+using OpenOrm.SqlProvider.Shared;
+using Faker;
+using MySqlConnector;
 
 namespace XUnitTests
 {
@@ -19,12 +22,37 @@ namespace XUnitTests
         {
             return new OpenOrmConfiguration
             {
-                ConnectionString = "server=localhost;uid=root;pwd=root;database=openorm",
+                ConnectionString = "server=localhost;uid=root;pwd=root;database=openorm;",
                 PrintSqlQueries = false,
                 PutIdFieldAtFirstPosition = true,
                 Schema = "",
-                MapPrivateProperties = true
+                MapPrivateProperties = true,
+                EnableAutomaticMigration = true,
+                UseDatabaseSchema = true
             }.GetConnection();
+        }
+
+        private void DropTables(OpenOrmDbConnection db)
+        {
+            if (db.TableExists<Model20Props>()) db.DropTable<Model20Props>();
+            if (db.TableExists<ModelDouble>()) db.DropTable<ModelDouble>();
+            if (db.TableExists<ModelInt>()) db.DropTable<ModelInt>();
+            if (db.TableExists<ModelKeywordColName>()) db.DropTable<ModelKeywordColName>();
+            if (db.TableExists<ModelMultiplePK>()) db.DropTable<ModelMultiplePK>();
+            if (db.TableExists<ModelNestedChild>()) db.DropTable<ModelNestedChild>();
+            if (db.TableExists<ModelNestedParent>()) db.DropTable<ModelNestedParent>();
+            if (db.TableExists<ModelNullableDouble>()) db.DropTable<ModelNullableDouble>();
+            if (db.TableExists<ModelPrivate>()) db.DropTable<ModelPrivate>();
+            if (db.TableExists<ModelPropRenamed>()) db.DropTable<ModelPropRenamed>();
+            if (db.TableExists<ModelSerializeParent>()) db.DropTable<ModelSerializeParent>();
+            if (db.TableExists<ModelString>()) db.DropTable<ModelString>();
+            if (db.TableExists<ModelStringDefault>()) db.DropTable<ModelStringDefault>();
+            if (db.TableExists<ModelStringNotNull>()) db.DropTable<ModelStringNotNull>();
+            if (db.TableExists<ModelStringUnique>()) db.DropTable<ModelStringUnique>();
+            if (db.TableExists<ModelTableRenamed>()) db.DropTable<ModelTableRenamed>();
+            if (db.TableExists<ModelWithoutId>()) db.DropTable<ModelWithoutId>();
+            if (db.TableExists<ObjectSerialize>()) db.DropTable<ObjectSerialize>();
+            if (db.TableExists<Read>()) db.DropTable<Read>();
         }
         #endregion
 
@@ -33,7 +61,9 @@ namespace XUnitTests
         public void CheckTableExists_ModelString_ShouldBeFalse()
         {
             using var db = GetConnection();
-            if (db.TableExists<ModelString>()) db.DropTable<ModelString>();
+
+            DropTables(db);
+
             Assert.False(db.TableExists<ModelString>());
         }
 
@@ -49,23 +79,16 @@ namespace XUnitTests
         public void InsertRandomData_Count_ModelString()
         {
             using var db = GetConnection();
-            //for (int i = 0; i < 10; i++)
-            //{
-            //    db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
-            //}
 
-            db.Insert(new ModelString { String_test = "test_mid_end" });
-            db.Insert(new ModelString { String_test = "szerz_mid_end" });
-            db.Insert(new ModelString { String_test = "test_afslkd_end" });
-            db.Insert(new ModelString { String_test = "aaaa" });
-            db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
-            db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
-            db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
-            db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
-            db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
-            db.Insert(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
+            //int count = RandomNumber.Next(10, 100);
+            db.Insert(new ModelString { String_test = "_test" });
+            for (int i = 0; i < 99; i++)
+            {
+                db.Insert(new ModelString { String_test = "azerty" });
+                //db.Insert(new ModelString { String_test = Faker.Lorem.Sentence(10) });
+            }
 
-            Assert.Equal(10, db.Count<ModelString>());
+            Assert.Equal(100, db.Count<ModelString>());
         }
 
         [Fact, Order(4)]
@@ -73,13 +96,16 @@ namespace XUnitTests
         {
             using var db = GetConnection();
             List<ModelString> list = new List<ModelString>();
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 99; i++)
             {
-                list.Add(new ModelString { String_test = Guid.NewGuid().ToString().Replace("-", "") });
+                list.Add(new ModelString { String_test = "azerty" });
+                //list.Add(new ModelString { String_test = Faker.Lorem.Sentence(10) });
             }
+            list.Add(new ModelString { String_test = "_test" });
+
             db.Insert(list);
 
-            Assert.Equal(20, db.Count<ModelString>());
+            Assert.Equal(200, db.Count<ModelString>());
         }
 
         [Fact, Order(5)]
@@ -88,14 +114,14 @@ namespace XUnitTests
             using var db = GetConnection();
             List<ModelString> list = db.Select<ModelString>();
             Assert.NotNull(list);
-            Assert.Equal(20, list.Count);
+            Assert.Equal(200, list.Count);
         }
 
         [Fact, Order(6)]
         public void SelectByExpressionContains_ModelString()
         {
             using var db = GetConnection();
-            List<ModelString> list = db.Select<ModelString>(x => x.String_test.Contains("test_"));
+            List<ModelString> list = db.Select<ModelString>(x => x.String_test.Contains("_test"));
             Assert.NotNull(list);
             Assert.Equal(2, list.Count);
         }
@@ -106,14 +132,24 @@ namespace XUnitTests
             using var db = GetConnection();
             ModelString ms = db.SelectById<ModelString>(1);
             Assert.NotNull(ms);
-            Assert.Equal("test_mid_end", ms.String_test);
+            Assert.Equal("_test", ms.String_test);
         }
 
         [Fact, Order(8)]
-        public void SelectFirst_Contains_mid_ModelString()
+        public void SelectFirst_Contains_test_ModelString()
         {
             using var db = GetConnection();
-            ModelString ms = db.SelectFirst<ModelString>(x => x.String_test.Contains("mid_"));
+
+            var tests2 = db.Select<ModelString>(x => x.String_test.Contains("_test"));
+            tests2 = db.Select<ModelString>(x => x.String_test.Contains("test"));
+            tests2 = db.Select<ModelString>(x => x.Id == 1);
+            Assert.NotNull(tests2);
+
+            ModelString ms = db.SelectFirst<ModelString>(x => x.String_test.Contains("_test"));
+            Assert.NotNull(ms);
+            Assert.Equal(1, ms.Id);
+
+            ms = db.SelectFirst<ModelString>(x => x.String_test.Contains("test"));
             Assert.NotNull(ms);
             Assert.Equal(1, ms.Id);
         }
@@ -122,9 +158,9 @@ namespace XUnitTests
         public void SelectLast_Contains_mid_ModelString()
         {
             using var db = GetConnection();
-            ModelString ms = db.SelectLast<ModelString>(x => x.String_test.Contains("mid_"));
+            ModelString ms = db.SelectLast<ModelString>(x => x.String_test.Contains("_test"));
             Assert.NotNull(ms);
-            Assert.Equal(2, ms.Id);
+            Assert.Equal(200, ms.Id);
         }
 
         [Fact, Order(10)]
@@ -143,9 +179,9 @@ namespace XUnitTests
         public void SqlDirect_ModelString()
         {
             using var db = GetConnection();
-            var ms = db.SelectFirst<ModelString>(x => x.String_test == "aaaa");
+            var ms = db.SelectFirst<ModelString>(x => x.String_test == "_test");
             Assert.NotNull(ms);
-            db.SqlNonQuery($"UPDATE ModelString SET String_test = 'bbbb' WHERE Id = {ms.Id}");
+            db.SqlNonQuery($"UPDATE ModelString SET String_test = 'bbbb' WHERE Id = @p0", new SqlParameterItem("@p0", ms.Id));
             var ms2 = db.SelectById<ModelString>(ms.Id);
             Assert.Equal("bbbb", ms2.String_test);
         }
@@ -175,6 +211,25 @@ namespace XUnitTests
             db.DropTable<ModelString>();
             Assert.False(db.TableExists<ModelString>());
         }
+
+        [Fact, Order(50)]
+        public void Select_NoParameter()
+        {
+            using var db = GetConnection();
+
+            if (db.TableExists<Model20Props>()) db.DropTable<Model20Props>();
+            db.CreateTable<Model20Props>();
+
+            db.Insert(new Model20Props { testbool = true });
+            db.Insert(new Model20Props { testbool = false });
+
+            var test = db.Select<Model20Props>(x => x.testbool);
+
+            Assert.Single(test);
+
+            db.DropTable<Model20Props>();
+        }
+
         #endregion
 
         #region Unique
@@ -257,8 +312,6 @@ namespace XUnitTests
 
             db.DropColumn(typeof(ModelString), "String_unique");
 
-            db.DropTable<ModelString>();
-
             Assert.False(db.ColumnExists<ModelString>("String_unique"));
         }
 
@@ -284,7 +337,15 @@ namespace XUnitTests
 
             db.Update(data2);
 
+            db.DropColumn(typeof(Read), "Select");
+
+            Assert.False(db.ColumnExists<Read>("Select"));
+
+            db.AddColumn(typeof(Read), new ColumnDefinition(typeof(Read), "Select"));
+
             db.DeleteAll<Read>();
+
+            Assert.Equal(0, db.Count<Read>());
 
             db.DropTable<Read>();
 
@@ -390,6 +451,8 @@ namespace XUnitTests
 
             var data3 = db.Select<ModelPrivate>(x => x.Id == 1);
 
+            Assert.Equal(9, data3.First().Double_public);
+
             Assert.NotNull(data3);
 
             db.DeleteAll<ModelPrivate>();
@@ -409,6 +472,8 @@ namespace XUnitTests
             if (db.TableExists<ModelPropRenamed>()) db.DropTable<ModelPropRenamed>();
 
             db.CreateTable<ModelPropRenamed>();
+
+            Assert.True(db.ColumnExists<ModelPropRenamed>("Renamed"));
 
             db.Insert(new ModelPropRenamed { Str = "test" });
 
@@ -505,27 +570,36 @@ namespace XUnitTests
             model = db.SelectFirst<Model20Props>(x => x.dbl1 == (1 * 0));
             Assert.NotNull(model);
 
-            //method
+            //method call
             model = db.SelectFirst<Model20Props>(x => string.IsNullOrEmpty(x.str1));
             Assert.NotNull(model);
 
-            //method + compare with bool
+            //method call + compare with bool
             model = db.SelectFirst<Model20Props>(x => string.IsNullOrEmpty(x.str1) == true);
             Assert.NotNull(model);
 
-            //method
+            //method call + negation
+            model = db.SelectFirst<Model20Props>(x => !string.IsNullOrEmpty(x.str2));
+            Assert.NotNull(model);
+
+            //method call
             model = db.SelectFirst<Model20Props>(x => x.str2.Contains("e"));
             Assert.NotNull(model);
 
-            //method
+            //method call
             model = db.SelectFirst<Model20Props>(x => x.str2.StartsWith("t"));
             Assert.NotNull(model);
 
-            //method
+            //method call
             model = db.SelectFirst<Model20Props>(x => x.str2.EndsWith("!"));
             Assert.NotNull(model);
 
+            //double negation + method call
             model = db.SelectFirst<Model20Props>(x => !x.testbool && !string.IsNullOrEmpty(x.str2));
+            Assert.NotNull(model);
+
+            //double negation + method call inverse
+            model = db.SelectFirst<Model20Props>(x => !string.IsNullOrEmpty(x.str2) && !x.testbool);
             Assert.NotNull(model);
 
             db.DropTable<Model20Props>();
@@ -568,11 +642,49 @@ namespace XUnitTests
         }
         #endregion
 
+        #region Migration
+        [Fact, Order(50)]
+        public void AutomaticMigration()
+        {
+            using var db = GetConnection();
 
+            if (db.TableExists<Model20Props>()) db.DropTable<Model20Props>();
+            db.CreateTable<Model20Props>();
 
+            db.DropColumn(typeof(Model20Props), "str4");
 
+            Assert.False(db.ColumnExists<Model20Props>("str4"));
 
+            db.Migrate();
 
+            Assert.True(db.ColumnExists<Model20Props>("str4"));
+        }
+        #endregion
+
+        #region SchemaDifferences
+        [Fact, Order(70)]
+        public void Select_MissingColumn()
+        {
+            bool exception = false;
+            using var db = GetConnection();
+            db.CreateTable<Model20Props>();
+            db.DropColumn(typeof(Model20Props), "testbool");
+
+            try
+            {
+                _ = db.Select<Model20Props>();
+            }
+            catch (Exception)
+            {
+                exception = true;
+            }
+
+            db.DropTable<Model20Props>();
+
+            Assert.False(exception);
+        }
+
+        #endregion
 
     }
 }

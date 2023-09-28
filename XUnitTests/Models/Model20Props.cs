@@ -5,6 +5,7 @@ using System.Text;
 
 namespace XUnitTests.Models
 {
+    [DbModel]
     public class Model20Props
     {
         [DbPrimaryKey, DbAutoIncrement]

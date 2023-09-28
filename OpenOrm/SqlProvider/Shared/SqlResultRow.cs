@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using OpenOrm.Extensions;
+using OpenOrm.Configuration;
 
 namespace OpenOrm.SqlProvider.Shared
 {
@@ -25,9 +26,21 @@ namespace OpenOrm.SqlProvider.Shared
         public string Get(string sColumnName)
         {
             if (Row.ContainsKey(sColumnName))
-                return Row[sColumnName].ToString();
+                return Row[sColumnName]?.ToString();
             else
                 return "";
+        }
+
+        public string Get(int colIndex)
+        {
+            if (Row.Count > colIndex)
+            {
+                return Row.Values.ElementAt(colIndex)?.ToString();
+            }
+            else
+            {
+                return null;
+            }
         }
 
         public T Get<T>(string sColumnName)
@@ -94,13 +107,13 @@ namespace OpenOrm.SqlProvider.Shared
             return result;
         }
 
-        public T ToObject<T>(TableDefinition td = null)
+        public T ToObject<T>(OpenOrmDbConnection cnx, TableDefinition td = null)
         {
             T oResult = (T)Activator.CreateInstance(typeof(T), new object[] { });
 
             if (Row.Count > 0)
             {
-                if (td == null) td = TableDefinition.Get<T>();
+                if (td == null) td = TableDefinition.Get<T>(cnx);
                 foreach (ColumnDefinition cd in td.Columns)
                 {
                     if (Row.ContainsKey(cd.Name) && Row[cd.Name] != null)
@@ -147,13 +160,13 @@ namespace OpenOrm.SqlProvider.Shared
             }
         }
 
-        public object ToObject(Type t, TableDefinition td = null)
+        public object ToObject(Type t, OpenOrmDbConnection cnx, TableDefinition td = null)
         {
             object oResult = Activator.CreateInstance(t, new object[] { });
 
             if (Row.Count > 0)
             {
-                if (td == null) td = TableDefinition.Get(t);
+                if (td == null) td = TableDefinition.Get(t, cnx);
                 foreach (ColumnDefinition cd in td.Columns)
                 {
                     if (Row.ContainsKey(cd.Name) && Row[cd.Name] != null)

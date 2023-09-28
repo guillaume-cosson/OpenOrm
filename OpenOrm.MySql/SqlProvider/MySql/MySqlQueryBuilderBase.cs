@@ -13,17 +13,37 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+//using System.Security.Policy;
 
 namespace OpenOrm.SqlProvider.MySql
 {
     public class MySqlQueryBuilderBase : BaseQueryBuilder, ISqlQueryBuilder
     {
         #region Constructor
-        public MySqlQueryBuilderBase(OpenOrmConfigurationBase config)
+        private static bool loadingDefinition = false;
+        public MySqlQueryBuilderBase(OpenOrmDbConnection cnx)
         {
-            if (config == null) config = new OpenOrmConfiguration();
-            config.ConnectorProvider = new MySqlConnector();
-            Configuration = config;
+            if (cnx.Configuration == null) cnx.Configuration = new OpenOrmConfiguration();
+            cnx.Configuration.ConnectorProvider = new MySqlConnector();
+            Configuration = cnx.Configuration;
+
+            InitDatabaseSchemaMapping(cnx);
+        }
+
+        protected void InitDatabaseSchemaMapping(OpenOrmDbConnection cnx, bool reinit = false)
+        {
+            if (reinit)
+            {
+                DbDefinition.Clear(cnx.ConnectionString);
+            }
+            if (cnx.Configuration.UseDatabaseSchema && (DbDefinition.Definitions == null || !DbDefinition.Definitions.ContainsKey(cnx.ConnectionString)) && !loadingDefinition)
+            {
+                loadingDefinition = true;
+                var tds = cnx.GetTablesDefinitionsFromDb();
+                DbDefinition.SetDbDefinition(cnx.ConnectionString, tds);
+                TableDefinition.DbDefinitionChanged(cnx.ConnectionString);
+                loadingDefinition = false;
+            }
         }
         #endregion
 
@@ -36,64 +56,69 @@ namespace OpenOrm.SqlProvider.MySql
 
         public void CreateTable(OpenOrmDbConnection cnx, Type modelType)
         {
-            List<string> primaryKeys = new List<string>();
-            List<string> columns = new List<string>();
-            List<string> colNames = new List<string>();
-            TableDefinition td = TableDefinition.Get(modelType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-
-            string sql = $"CREATE TABLE `{GetTableName(modelType)}` (";
-
-            foreach (ColumnDefinition cd in td.Columns)
+            if(!cnx.TableExists(GetTableName(modelType)))
             {
-                string fieldsql = $" `{cd.Name}` {MySqlTools.ToStringType(cd.PropertyType.GetBaseType(), cd.Size)}";
+                List<string> primaryKeys = new List<string>();
+                List<string> columns = new List<string>();
+                List<string> colNames = new List<string>();
+                TableDefinition td = TableDefinition.Get(modelType, cnx);
 
-                if (cd.IsPrimaryKey)
+                string sql = $"CREATE TABLE `{GetTableName(modelType)}` (";
+
+                foreach (ColumnDefinition cd in td.Columns)
                 {
-                    if (td.Columns.Where(x => x.IsPrimaryKey).Count() == 1)
+                    string fieldsql = $" `{cd.Name}` {MySqlTools.ToStringType(cd.PropertyType.GetBaseType(), cd.Size)}";
+
+                    if (cd.IsPrimaryKey)
                     {
-                        fieldsql += " PRIMARY KEY";
+                        if (td.Columns.Where(x => x.IsPrimaryKey).Count() == 1)
+                        {
+                            fieldsql += " PRIMARY KEY";
+                        }
+
+                        primaryKeys.Add($"`{cd.Name}`");
                     }
 
-                    primaryKeys.Add($"`{cd.Name}`");
+                    if (cd.IsAutoIncrement)
+                    {
+
+                        fieldsql += " AUTO_INCREMENT";
+                    }
+
+                    if (cd.IsNotNullColumn || (cd.IsPrimaryKey && !cd.IsAutoIncrement))
+                    {
+                        fieldsql += " NOT NULL";
+                    }
+
+                    if (cd.IsUnique && !cd.IsAutoIncrement && !cd.IsPrimaryKey)
+                    {
+                        fieldsql += " UNIQUE";
+                    }
+
+                    if (!string.IsNullOrEmpty(fieldsql))
+                    {
+                        columns.Add(fieldsql);
+                        colNames.Add(cd.Name);
+                    }
                 }
 
-                if (cd.IsAutoIncrement)
+                string fields = string.Join(",", columns);
+                sql += fields;
+
+                if (td.Columns.Count(x => x.IsPrimaryKey) > 1)
                 {
-
-                    fieldsql += " AUTO_INCREMENT";
+                    sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
                 }
 
-                if (cd.IsNotNullColumn || (cd.IsPrimaryKey && !cd.IsAutoIncrement))
-                {
-                    fieldsql += " NOT NULL";
-                }
+                sql += ");";
 
-                if (cd.IsUnique && !cd.IsAutoIncrement && !cd.IsPrimaryKey)
-                {
-                    fieldsql += " UNIQUE";
-                }
+                SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
 
-                if (!string.IsNullOrEmpty(fieldsql))
-                {
-                    columns.Add(fieldsql);
-                    colNames.Add(cd.Name);
-                }
+                //Create default index for the table
+                //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({string.Join(",", colNames)});", SqlQueryType.Sql);
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
-
-            string fields = string.Join(",", columns);
-            sql += fields;
-
-            if (td.Columns.Count(x => x.IsPrimaryKey) > 1)
-            {
-                sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
-            }
-
-            sql += ");";
-
-            SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
-
-            //Create default index for the table
-            //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({string.Join(",", colNames)});", SqlQueryType.Sql);
         }
 
         public bool TableExists<T>(OpenOrmDbConnection cnx)
@@ -112,10 +137,10 @@ namespace OpenOrm.SqlProvider.MySql
         {
             SqlQuery sq = new SqlQuery();
             string dbname = cnx.ConnectionString.ToLower().GetStringBetween("database=", ";");
-            sq.AddParameter("DB_NAME", dbname, SqlDbType.NVarChar);
-            sq.AddParameter("TABLE_NAME", tableName, SqlDbType.NVarChar);
-            //SqlResult r = sq.Read(cnx, "SELECT COUNT(name) FROM sqlite_master WHERE type='table' AND name=@TABLE_NAME", SqlQueryType.Sql);
-            SqlResult r = sq.Read(cnx, "SELECT count(*) FROM information_schema.TABLES WHERE(TABLE_SCHEMA = @DB_NAME) AND(TABLE_NAME = @TABLE_NAME);", SqlQueryType.Sql);
+            //sq.AddParameter("DB_NAME", dbname, SqlDbType.NVarChar);
+            //sq.AddParameter("TABLE_NAME", tableName, SqlDbType.NVarChar);
+            //SqlResult r = sq.Read(cnx, "SELECT count(*) as 'Exists' FROM information_schema.TABLES WHERE(lower(TABLE_SCHEMA) = lower(@DB_NAME)) AND (lower(TABLE_NAME) = lower(@TABLE_NAME));", SqlQueryType.Sql);
+            SqlResult r = sq.Read(cnx, $"SELECT EXISTS( SELECT 1 FROM information_schema.TABLES WHERE(lower(TABLE_SCHEMA) = lower('{dbname}')) AND (lower(TABLE_NAME) = lower('{tableName}'))); ", SqlQueryType.Sql);
             bool result = r.HasRows && (r.Get<bool>(0, 0));
             sq.Dispose();
             r.Dispose();
@@ -130,10 +155,10 @@ namespace OpenOrm.SqlProvider.MySql
         //todo
         public bool TemporaryTableExists(OpenOrmDbConnection cnx, string tableName)
         {
-            string sql = "SELECT COUNT(name) FROM sqlite_temp_master WHERE type='table' AND name=@TABLE_NAME";
+            string sql = "SELECT EXISTS( SELECT 1 FROM sqlite_temp_master WHERE type='table' AND lower(name)=lower(@TABLE_NAME))";
 
             SqlQuery sq = new SqlQuery();
-            sq.AddParameter("TABLE_NAME", tableName, SqlDbType.NVarChar);
+            sq.AddParameter("@TABLE_NAME", tableName, SqlDbType.NVarChar);
             SqlResult r = sq.Read(cnx, sql, SqlQueryType.Sql);
             bool result = r.HasRows && (r.Get<bool>(0, 0));
 
@@ -155,10 +180,17 @@ namespace OpenOrm.SqlProvider.MySql
 
         public void DropTable(OpenOrmDbConnection cnx, string tableName)
         {
-            SqlQuery sq = new SqlQuery(cnx);
-            //sq.ExecuteSql(cnx, $"DROP INDEX IF EXISTS {tableName}_INDEX ON {DefaultSchema}.{tableName}");
-            sq.ExecuteSql(cnx, $"DROP TABLE `{tableName}`;");
-            sq.Dispose();
+            if(cnx.TableExists(tableName))
+            {
+                SqlQuery sq = new SqlQuery(cnx);
+                //sq.ExecuteSql(cnx, $"DROP INDEX IF EXISTS {tableName}_INDEX ON {DefaultSchema}.{tableName}");
+                //sq.AddParameter("@TABLE_NAME", tableName.ToLower(), SqlDbType.NVarChar);
+                //sq.ExecuteSql(cnx, $"DROP TABLE @TABLE_NAME;");
+                sq.ExecuteSql(cnx, $"DROP TABLE `{tableName}`;");
+                sq.Dispose();
+
+                InitDatabaseSchemaMapping(cnx, true);
+            }
         }
 
         public void TruncateTable<T>(OpenOrmDbConnection cnx)
@@ -168,10 +200,78 @@ namespace OpenOrm.SqlProvider.MySql
 
         public void TruncateTable(OpenOrmDbConnection cnx, Type modelType)
         {
-            SqlQuery.Execute(cnx, $"TRUNCATE TABLE `{GetTableName(modelType)}`;");
+            if (cnx.TableExists(GetTableName(modelType)))
+            {
+                SqlQuery.Execute(cnx, $"TRUNCATE TABLE `{GetTableName(modelType)}`;");
+            }
         }
 
+        public List<TableDefinition> GetTablesDefinitionsFromDb(OpenOrmDbConnection cnx)
+        {
+            List<TableDefinition> result = new List<TableDefinition>();
 
+            string sql = $"select * from information_schema.columns where lower(table_schema) = lower('{cnx.ConnectionString.ToLower().GetStringBetween("database=", ";")}') order by table_name,ordinal_position;";
+
+            SqlQuery sq = new SqlQuery();
+            SqlResult r = sq.Read(cnx, sql, SqlQueryType.Sql);
+
+            if (r.HasRows)
+            {
+                List<string> tables = r.Rows.Select(x => x.Get("TABLE_NAME")).Distinct().ToList();
+                foreach (string table in tables)
+                {
+                    //if (table == "OpenOrmMigration")
+                    //{
+                    //    continue;
+                    //}
+                    //TableDefinition td = GetTableDefinitionFromDb(cnx, table);
+                    TableDefinition td = new TableDefinition();
+                    td.TableName = table;
+                    td.ExistsInDb = true;
+
+                    foreach (var row in r.Rows.Where(x => x.Get("TABLE_NAME") == table))
+                    {
+                        ColumnDefinition cd = new ColumnDefinition
+                        {
+                            TableDefinition = td,
+                            Name = row.Get("COLUMN_NAME"),
+                            SqlDbType = OpenOrmTools.ToSqlDbType(row.Get("DATA_TYPE")),
+                            DbType = OpenOrmTools.ToSqlDbType(row.Get("DATA_TYPE")).ToDbType(),
+                            ExistsInDb = true,
+                            IsPrimaryKey = row.Get("COLUMN_KEY") == "PRI",
+                            IsAutoIncrement = row.Get("EXTRA") == "auto_increment",
+                            IsUnique = row.Get("COLUMN_KEY") == "UNI",
+                            DefaultValue = row.Row["COLUMN_DEFAULT"],
+                            HasDefaultValue = row.Row["COLUMN_DEFAULT"] != null,
+                            IsNotNullColumn = !row.Get("IS_NULLABLE").ToBool(),
+                            Size = row.Get("CHARACTER_MAXIMUM_LENGTH").ToInt(),
+                            Precision = row.Get("NUMERIC_PRECISION").ToInt(),
+                            Scale = row.Get("NUMERIC_SCALE").ToInt(),
+                            
+                        };
+
+                        cd.HasSize = cd.DbType == System.Data.DbType.String && cd.Size > -1;
+                        cd.HasDecimalSize = cd.DbType != System.Data.DbType.Int32 && cd.DbType != System.Data.DbType.Int64 && cd.Precision > 0;
+
+                        td.Columns.Add(cd);
+                    }
+
+                    result.Add(td);
+                }
+            }
+
+            return result;
+        }
+
+        public TableDefinition GetTableDefinitionFromType<T>(OpenOrmDbConnection cnx)
+        {
+            return TableDefinition.Get(typeof(T), cnx);
+        }
+
+        public TableDefinition GetTableDefinitionFromType(OpenOrmDbConnection cnx, Type objType)
+        {
+            return TableDefinition.Get(objType.GetType(), cnx);
+        }
         #endregion
 
         #region Column
@@ -188,7 +288,7 @@ namespace OpenOrm.SqlProvider.MySql
             sq.AddParameter("TABLE_NAME", GetTableName(modelType), SqlDbType.NVarChar);
             sq.AddParameter("COL_NAME", columnName, SqlDbType.NVarChar);
             //SqlResult r = sq.Read(cnx, "SELECT COUNT(name) FROM sqlite_master WHERE type='table' AND name=@TABLE_NAME", SqlQueryType.Sql);
-            SqlResult r = sq.Read(cnx, "SELECT count(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = @DB_NAME AND TABLE_NAME = @TABLE_NAME AND COLUMN_NAME=@COL_NAME;", SqlQueryType.Sql);
+            SqlResult r = sq.Read(cnx, "SELECT count(*) FROM information_schema.COLUMNS WHERE lower(TABLE_SCHEMA) = lower(@DB_NAME) AND lower(TABLE_NAME) = lower(@TABLE_NAME) AND COLUMN_NAME=@COL_NAME;", SqlQueryType.Sql);
             bool result = r.HasRows && (r.Get<bool>(0, 0));
             sq.Dispose();
             r.Dispose();
@@ -199,9 +299,15 @@ namespace OpenOrm.SqlProvider.MySql
         {
             if (!ColumnExists(cnx, modelType, colDef.Name))
             {
+                if(colDef.TableDefinition == null)
+                {
+                    colDef.TableDefinition = TableDefinition.Get(modelType, cnx);
+                }
                 SqlQuery.Execute(cnx, $"ALTER TABLE `{GetTableName(modelType)}` ADD COLUMN `{colDef.Name}` {MySqlTools.ToStringType(colDef.PropertyType.GetBaseType())}; ");
                 SqlQuery.Execute(cnx, $"ALTER TABLE `{GetTableName(modelType)}` DROP PRIMARY KEY, ADD PRIMARY KEY( `{ string.Join(",", colDef.TableDefinition.PrimaryKeys.Select(x => x.Name).ToList()) }` ); ");
                 //throw new Exception("Modifier la primary key si ka colonne est une clé");
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
         }
         //todo
@@ -209,7 +315,7 @@ namespace OpenOrm.SqlProvider.MySql
         {
             if (ColumnExists(cnx, modelType, colName))
             {
-                SqlQuery.Execute(cnx, $"ALTER TABLE {GetTableName(modelType)} DROP COLUMN {colName};");
+                SqlQuery.Execute(cnx, $"ALTER TABLE `{GetTableName(modelType)}` DROP COLUMN `{colName}`;");
 
 
                 //string temp_table = GetTableName(modelType) + "_" + Guid.NewGuid().ToString().Replace("-", "");
@@ -248,6 +354,8 @@ namespace OpenOrm.SqlProvider.MySql
                 //DropTable(cnx, GetTableName(modelType));
                 //SqlQuery.Execute(cnx, $"ALTER TABLE {temp_table} RENAME TO {GetTableName(modelType)};", SqlQueryType.Sql);
                 //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({names});", SqlQueryType.Sql);
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
         }
         #endregion
@@ -266,9 +374,9 @@ namespace OpenOrm.SqlProvider.MySql
             SqlQuery sq = new SqlQuery();
             List<string> columns = new List<string>();
             List<string> values = new List<string>();
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
 
-            foreach (ColumnDefinition cd in td.Columns)
+            foreach (ColumnDefinition cd in td.Columns.Where(x => x.ExistsInDb || !cnx.Configuration.UseDatabaseSchema))
             {
                 var value = cd.PropertyInfo.GetValue(model);
                 if (value == null && cd.IsNotNullColumn && cd.HasDefaultValue)
@@ -290,8 +398,9 @@ namespace OpenOrm.SqlProvider.MySql
                 }
             }
 
-            string sql = $"INSERT INTO `{GetTableName<T>()}` (`{string.Join("`,`", columns)}`) VALUES ({string.Join(",", values)}); SELECT LAST_INSERT_ID();";
-            SqlResult r = sq.Read(cnx, sql, SqlQueryType.Sql);
+            string sql = $"INSERT INTO `{GetTableName<T>()}` (`{string.Join("`,`", columns)}`) VALUES ({string.Join(",", values)}); ";
+            sq.ExecuteSql(cnx, sql);
+            SqlResult r = SqlQuery.ExecuteRead(cnx, "SELECT LAST_INSERT_ID();");
             long result = r.Get<long>(0, 0);
             sq.Dispose();
             r.Dispose();
@@ -304,7 +413,7 @@ namespace OpenOrm.SqlProvider.MySql
             {
                 List<string> columns = new List<string>();
                 List<string> values;
-                TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                TableDefinition td = TableDefinition.Get<T>(cnx);
 
                 int chunkSize = (1000 / td.Columns.Count) - 1;
 
@@ -312,25 +421,25 @@ namespace OpenOrm.SqlProvider.MySql
                 {
                     string sql = "START TRANSACTION; ";
 
-                    foreach (ColumnDefinition cd in td.Columns)
-                    {
-                        var value = cd.PropertyInfo.GetValue(models[0]);
+                    //foreach (ColumnDefinition cd in td.Columns.Where(x => x.ExistsInDb || !cnx.Configuration.UseDatabaseSchema))
+                    //{
+                    //    var value = cd.PropertyInfo.GetValue(models[0]);
 
-                        if (value != null)
-                        {
-                            if (!cd.IsAutoIncrement)
-                            {
-                                columns.Add(cd.Name);
-                            }
-                        }
-                    }
+                    //    if (value != null)
+                    //    {
+                    //        if (!cd.IsAutoIncrement)
+                    //        {
+                    //            columns.Add(cd.Name);
+                    //        }
+                    //    }
+                    //}
 
                     foreach (T model in submodels)
                     {
                         columns = new List<string>();
                         values = new List<string>();
 
-                        foreach (ColumnDefinition cd in td.Columns)
+                        foreach (ColumnDefinition cd in td.Columns.Where(x => x.ExistsInDb || !cnx.Configuration.UseDatabaseSchema))
                         {
                             var value = cd.PropertyInfo.GetValue(model);
 
@@ -359,13 +468,13 @@ namespace OpenOrm.SqlProvider.MySql
         #endregion
 
         #region Select
-        //todo
+        
         public List<T> Select<T>(OpenOrmDbConnection cnx, bool forceLoadNestedObjects = false)
         {
             if (cnx.Configuration.EnableRamCache && RamCache.Exists(RamCache.GetKey<T>())) return (List<T>)RamCache.Get(RamCache.GetKey<T>());
 
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr(false)} FROM `{GetTableName<T>()}`;";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr(true, '`', '`')} FROM `{GetTableName<T>()}`;";
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
             List<T> result = sq.ReadToObjectList<T>();
 
@@ -380,13 +489,13 @@ namespace OpenOrm.SqlProvider.MySql
             sq.Dispose();
             return result;
         }
-        //todo
+        
         public List<T> Select<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate, bool forceLoadNestedObjects = false)
         {
             if (cnx.Configuration.EnableRamCache && RamCache.Exists(RamCache.GetKey<T>(predicate))) return (List<T>)RamCache.Get(RamCache.GetKey<T>(predicate));
 
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr(false)} FROM `{GetTableName<T>()}` WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr(true, '`', '`')} FROM `{GetTableName<T>()}` WHERE ";
 
             sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
 
@@ -405,13 +514,14 @@ namespace OpenOrm.SqlProvider.MySql
             sq.Dispose();
             return result;
         }
-        //todo
+        
         public T SelectFirst<T>(OpenOrmDbConnection cnx, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr(false)} FROM `{GetTableName<T>()}` WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr(true, '`', '`')} FROM `{GetTableName<T>()}` LIMIT 1 ; ";
 
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
+            //T result = sq.ReadToObjectList<T>().FirstOrDefault();
             T result = sq.ReadToObject<T>();
 
             //Load nested objects/values
@@ -426,16 +536,23 @@ namespace OpenOrm.SqlProvider.MySql
             sq.Dispose();
             return result;
         }
-        //todo
+        
         public T SelectFirst<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr(false)} FROM `{GetTableName<T>()}` WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr(true, '`', '`')} FROM `{GetTableName<T>()}` ";
 
-            sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
+            string where = predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
+            if(!string.IsNullOrEmpty(where))
+            {
+                sql += $" WHERE {where} ";
+            }
+            sql += " LIMIT 1 ;";
+
 
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
-            Parameters.ForEach(x => sq.AddParameter(x.Name, x.Value, x.SqlDbType));
+            Parameters.ForEach(x => sq.AddParameter(x.Name, x.Value, x.SqlDbType == SqlDbType.NVarChar ? SqlDbType.VarChar : x.SqlDbType));
+            //T result = sq.ReadToObjectList<T>().FirstOrDefault(predicate.Compile());
             T result = sq.ReadToObject<T>();
 
             //Load nested objects/values
@@ -452,8 +569,8 @@ namespace OpenOrm.SqlProvider.MySql
         //todo
         public T SelectLast<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr(false)} FROM `{GetTableName<T>()}` WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr(true, '`', '`')} FROM `{GetTableName<T>()}` WHERE ";
 
             sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
 
@@ -476,8 +593,8 @@ namespace OpenOrm.SqlProvider.MySql
         //todo
         public T SelectById<T>(OpenOrmDbConnection cnx, object id, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr(false)} FROM `{GetTableName<T>()}` WHERE Id = {id} LIMIT 1;";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr(true, '`', '`')} FROM `{GetTableName<T>()}` WHERE Id = {id} LIMIT 1;";
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
             T result = sq.ReadToObject<T>();
 
@@ -496,7 +613,7 @@ namespace OpenOrm.SqlProvider.MySql
         //todo
         public long Count<T>(OpenOrmDbConnection cnx)
         {
-            string sql = $"SELECT COUNT({OpenOrmTools.GetPrimaryKeyFieldName<T>()}) FROM `{GetTableName<T>()}`";
+            string sql = $"SELECT COUNT(`{OpenOrmTools.GetPrimaryKeyFieldName<T>()}`) FROM `{GetTableName<T>()}`";
             SqlResult r = SqlQuery.ExecuteRead(cnx, sql, SqlQueryType.Sql);
 
             long result = 0;
@@ -507,8 +624,8 @@ namespace OpenOrm.SqlProvider.MySql
         //todo
         public long Count<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT COUNT({OpenOrmTools.GetPrimaryKeyFieldName<T>()}) FROM `{GetTableName<T>()}` WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT COUNT(`{OpenOrmTools.GetPrimaryKeyFieldName<T>()}`) FROM `{GetTableName<T>()}` WHERE ";
 
             sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
 
@@ -529,7 +646,7 @@ namespace OpenOrm.SqlProvider.MySql
             List<string> updateFields = new List<string>();
             List<string> keyFields = new List<string>();
             List<SqlParameterItem> parameters = new List<SqlParameterItem>();
-            if (td == null) td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            if (td == null) td = TableDefinition.Get<T>(cnx);
 
             foreach (ColumnDefinition cd in td.Columns)
             {
@@ -578,7 +695,7 @@ namespace OpenOrm.SqlProvider.MySql
         {
             List<string> keyFields = new List<string>();
             List<SqlParameterItem> parameters = new List<SqlParameterItem>();
-            if (td == null) td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            if (td == null) td = TableDefinition.Get<T>(cnx);
 
             foreach (ColumnDefinition cd in td.Columns)
             {
@@ -627,7 +744,7 @@ namespace OpenOrm.SqlProvider.MySql
         //todo
         public void Delete<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             string sql = $"DELETE FROM `{GetTableName<T>()}` WHERE ";
 
             sql += predicate.ToSqlWhere(td, out var Parameters);
@@ -713,13 +830,13 @@ namespace OpenOrm.SqlProvider.MySql
         {
             if (Result == null || (Result != null && Result.Count == 0)) return;
 
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
 
             foreach (ColumnDefinition cd in td.NestedColumns)
             {
                 if (!cd.NestedAutoLoad && !forceLoad) continue;
 
-                TableDefinition nested_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                TableDefinition nested_td = TableDefinition.Get(cd.NestedChildType, cnx);
                 string fields = string.Join(",", nested_td.Columns.Select(x => x.Name));
 
                 if (cd.PropertyType.IsListOrArray())
@@ -742,7 +859,7 @@ namespace OpenOrm.SqlProvider.MySql
                     //Load nested objects/values
                     if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
                     {
-                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx);
                         if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
                         {
                             LoadNestedValues(cnx, forceLoad, ref nested);
@@ -797,7 +914,7 @@ namespace OpenOrm.SqlProvider.MySql
                     //Load nested objects/values
                     if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
                     {
-                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx);
                         if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
                         {
                             LoadNestedValues(cnx, forceLoad, ref nested);

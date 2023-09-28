@@ -19,6 +19,8 @@ namespace OpenOrm.SqlProvider.Shared
         public string Sql { get; set; }
         public List<SqlParameterItem> Parameters { get; set; }
         public bool WithBrackets { get; set; }
+        private char LeftBracket = '[';
+        private char RightBracket = ']';
 
         internal enum ParserOptions
         {
@@ -31,9 +33,11 @@ namespace OpenOrm.SqlProvider.Shared
             Parameters = new List<SqlParameterItem>();
         }
 
-        internal void BuildFromExpression(Expression exp, TableDefinition td, bool withBrackets = true)
+        internal void BuildFromExpression(Expression exp, TableDefinition td, bool withBrackets = true, char leftBracket = '[', char rightBracket = ']')
         {
             WithBrackets = withBrackets;
+            LeftBracket = leftBracket;
+            RightBracket = rightBracket;
 
             ParserOptions options = ParserOptions.EMPTY;
             if (exp is ConstantExpression) options = ParserOptions.NO_PARAMETER;
@@ -72,7 +76,7 @@ namespace OpenOrm.SqlProvider.Shared
                         PropertyInfo pi = ((PropertyInfo)mexp.Member);
                         if (WithBrackets)
                         {
-                            result += $"[{td.GetColumnNameFor(pi)}]";
+                            result += $"{LeftBracket}{td.GetColumnNameFor(pi)}{RightBracket}";
                         }
                         else
                         {
@@ -124,7 +128,7 @@ namespace OpenOrm.SqlProvider.Shared
                     {
                         if (WithBrackets)
                         {
-                            result += $"[{td.GetColumnNameFor(pi)}] = 1";
+                            result += $"{LeftBracket}{td.GetColumnNameFor(pi)}{RightBracket} = 1";
                         }
                         else
                         {
@@ -150,7 +154,7 @@ namespace OpenOrm.SqlProvider.Shared
                     {
                         if (WithBrackets)
                         {
-                            result += $"[{td.GetColumnNameFor(pi)}]";
+                            result += $"{LeftBracket}{td.GetColumnNameFor(pi)}{RightBracket}";
                         }
                         else
                         {

@@ -168,7 +168,9 @@ namespace OpenOrm.SqlProvider.Shared
             }
 
             //if (cnx.Configuration.PrintSqlQueries) System.Diagnostics.Debug.WriteLine(GetSql(cnx.Configuration.Connector, command));
+
             OnSqlQuery?.Invoke(command);
+
             CurrentConnector.ExecuteSql(cnx, command);
 
             ClearParameters();
@@ -200,9 +202,11 @@ namespace OpenOrm.SqlProvider.Shared
                 }
             }
 
-            //if (cnx.Configuration.PrintSqlQueries) System.Diagnostics.Debug.WriteLine(GetSql(cnx.Configuration.Connector, command));
+			//if (cnx.Configuration.PrintSqlQueries) System.Diagnostics.Debug.WriteLine(GetSql(cnx.Configuration.Connector, command));
 
-            await CurrentConnector.ExecuteSqlAsync(cnx, command);
+			OnSqlQuery?.Invoke(command);
+
+			await CurrentConnector.ExecuteSqlAsync(cnx, command);
 
             ClearParameters();
 
@@ -599,11 +603,11 @@ namespace OpenOrm.SqlProvider.Shared
         #region Conversion
         internal SqlResult DataReaderToSqlResult(DbDataReader dr)
         {
-            SqlResult result = new SqlResult();//int.MaxValue
+            SqlResult result = new SqlResult(_cnx);//int.MaxValue
 
             if (dr.HasRows)
             {
-                result = new SqlResult();
+                result = new SqlResult(_cnx);
                 while (dr.Read())
                 {
                     SqlResultRow srr = new SqlResultRow(dr.FieldCount);
@@ -633,11 +637,11 @@ namespace OpenOrm.SqlProvider.Shared
 
         internal async Task<SqlResult> DataReaderToSqlResultAsync(DbDataReader dr)
         {
-            SqlResult result = new SqlResult();//int.MaxValue
+            SqlResult result = new SqlResult(_cnx);//int.MaxValue
 
             if (dr.HasRows)
             {
-                result = new SqlResult();
+                result = new SqlResult(_cnx);
                 while (await dr.ReadAsync())
                 {
                     SqlResultRow srr = new SqlResultRow(dr.FieldCount);

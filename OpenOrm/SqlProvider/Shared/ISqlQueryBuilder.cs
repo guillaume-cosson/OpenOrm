@@ -42,36 +42,19 @@ namespace OpenOrm.SqlProvider.Shared
 
         void TruncateTable(OpenOrmDbConnection cnx, Type modelType);
 
-        //#region Async
-        //Task<bool> TableExistsAsync<T>(OpenOrmDbConnection cnx);
-        ////public abstract Task<bool> TableExistsAsync<T>(OpenOrmDbConnection cnx);
+        //TableDefinition GetTableDefinitionFromDb<T>(OpenOrmDbConnection cnx);
 
-        //Task<bool> TableExistsAsync(OpenOrmDbConnection cnx, Type modelType);
+        //TableDefinition GetTableDefinitionFromDb(OpenOrmDbConnection cnx, string tableName);
 
-        //Task<bool> TableExistsAsync(OpenOrmDbConnection cnx, string tableName);
+        List<TableDefinition> GetTablesDefinitionsFromDb(OpenOrmDbConnection cnx);
 
-        //Task<bool> TemporaryTableExistsAsync<T>(OpenOrmDbConnection cnx);
+        TableDefinition GetTableDefinitionFromType<T>(OpenOrmDbConnection cnx);
 
-        //Task<bool> TemporaryTableExistsAsync(OpenOrmDbConnection cnx, string tableName);
+        TableDefinition GetTableDefinitionFromType(OpenOrmDbConnection cnx, Type objType);
 
-        ////void CreateTemporaryTable(OpenOrmDbConnection cnx, string tableName);
+        //TableDefinition GetTableDefinitionFromDb(OpenOrmDbConnection cnx, string tableName);
 
-        ////void CreateTemporaryTable(OpenOrmDbConnection cnx, string tableName, SqlResult fromResult);
-
-        //Task CreateTableAsync<T>(OpenOrmDbConnection cnx);
-
-        //Task CreateTableAsync(OpenOrmDbConnection cnx, Type modelType);
-
-        //Task DropTableAsync<T>(OpenOrmDbConnection cnx);
-
-        //Task DropTableAsync(OpenOrmDbConnection cnx, Type modelType);
-
-        //Task DropTableAsync(OpenOrmDbConnection cnx, string tableName);
-
-        //Task TruncateTableAsync<T>(OpenOrmDbConnection cnx);
-
-        //Task TruncateTableAsync(OpenOrmDbConnection cnx, Type modelType);
-        //#endregion
+        //List<TableDefinition> GetTablesDefinitionsFromDb(OpenOrmDbConnection cnx);
         #endregion
 
         #region Column

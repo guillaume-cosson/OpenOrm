@@ -18,21 +18,26 @@ namespace OpenOrm.Configuration
         //public bool StoreComplexObjectsInJson { get; set; }
         public string ConnectionString { get; set; }
         public bool PutIdFieldAtFirstPosition { get; set; }
-        //public bool EnableAutomaticMigration { get; set; }
+        public bool EnableAutomaticMigration { get; set; }
+        public bool AutomaticMigrationAllowCreateTable { get; set; } = true;
+        public bool AutomaticMigrationAllowDropTable { get; set; }
+		public bool AutomaticMigrationAllowCreateColumn { get; set; } = true;
+        public bool AutomaticMigrationAllowDropColumn { get; set; }
+		public bool AutomaticMigrationAllowUpdateColumn { get; set; } = true;
         //public bool AutoDetectNestedObjects { get; set; }
         public bool ForceAutoLoadNestedObjects { get; set; }
-        public bool GenerateOrmDocInDatabase { get; set; }
+        //public bool GenerateOrmDocInDatabase { get; set; }
         //public int ListInsertChunkSize { get; set; } //Values limited to 1000 per request -> chunks size calculated at insert
         public bool ListInsertAllowBulkInsert { get; set; }
         public bool ListInsertFallBackToChunkInsertIfBulkInsertError { get; set; }
         public int ListInsertMinimumCountForBulkInsert { get; set; }
-        public bool UseOpenOrmConfigurationInDatabase { get; set; }
+        //public bool UseOpenOrmConfigurationInDatabase { get; set; }
         public bool PrintSqlQueries { get; set; }
         public bool UseSchemaCache { get; set; }
         public bool MapPrivateProperties { get; set; }
         public bool EnableRamCache { get; set; }
         public long RamCacheRowsLimitPerModel { get; set; }
-        public bool UseDatabaseSchema { get; set; }
+        public bool UseDatabaseSchema { get; set; } = true;
 
 
         internal OpenOrmConfigurationBase()
@@ -42,21 +47,27 @@ namespace OpenOrm.Configuration
             Schema = "";
             //StoreComplexObjectsInJson = false;
             PutIdFieldAtFirstPosition = true;
-            //EnableAutomaticMigration = false;
             //AutoDetectNestedObjects = false;
             ForceAutoLoadNestedObjects = false;
-            GenerateOrmDocInDatabase = false;
+            //GenerateOrmDocInDatabase = false;
             //ListInsertChunkSize = 500;
             ListInsertAllowBulkInsert = false;
             ListInsertFallBackToChunkInsertIfBulkInsertError = true;
             ListInsertMinimumCountForBulkInsert = 100;
-            UseOpenOrmConfigurationInDatabase = false;
+            //UseOpenOrmConfigurationInDatabase = false;
             PrintSqlQueries = false;
             UseSchemaCache = true;
             MapPrivateProperties = false;
             EnableRamCache = false;
             RamCacheRowsLimitPerModel = 50000;
             UseDatabaseSchema = true;
-        }
-    }
+
+			EnableAutomaticMigration = false;
+            AutomaticMigrationAllowCreateTable = true;
+            AutomaticMigrationAllowDropTable = false;
+            AutomaticMigrationAllowCreateColumn = true;
+            AutomaticMigrationAllowDropColumn = false;
+            AutomaticMigrationAllowUpdateColumn = true;
+		}
+	}
 }

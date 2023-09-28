@@ -1,7 +1,9 @@
-﻿using System;
+﻿using OpenOrm.Configuration;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -20,9 +22,11 @@ namespace OpenOrm.Schema
 
 		#region Properties
 		public static bool UseBrackets { get; set; }
-		public string DbServerName { get; set; }
-		public string DbName { get; set; }
+		//public string DbServerName { get; set; }
+		//public string DbName { get; set; }
+		//public string ConnectionString { get; set; }
 		public string TableName { get; set; }
+		public Type ModelType { get; set; }
 		public List<ColumnDefinition> Columns { get; set; }
 		public List<ColumnDefinition> NestedColumns { get; set; }
 		public List<ColumnDefinition> PrimaryKeys { get { return Columns.Where(x => x.IsPrimaryKey).ToList(); } }
@@ -48,63 +52,100 @@ namespace OpenOrm.Schema
 			ForeignKeys = new List<ColumnDefinition>();
 		}
 
-		public TableDefinition(Type t, bool useCache = true, bool includePrivateProperties = false)
-		{
-			if (Cache == null)
-			{
-				Cache = new ConcurrentDictionary<string, TableDefinition>();
-			}
+        //public TableDefinition(Type t, bool UseSchemaCache = true, bool MapPrivateProperties = false, bool UseDatabaseSchema = true)
+        //{
+        //    if (Cache == null)
+        //    {
+        //        Cache = new ConcurrentDictionary<string, TableDefinition>();
+        //    }
 
-			Columns = new List<ColumnDefinition>();
-			NestedColumns = new List<ColumnDefinition>();
-			ForeignKeys = new List<ColumnDefinition>();
+        //    Columns = new List<ColumnDefinition>();
+        //    NestedColumns = new List<ColumnDefinition>();
+        //    ForeignKeys = new List<ColumnDefinition>();
 
-			Load(t, useCache, includePrivateProperties);
+        //    Load(t, UseSchemaCache, MapPrivateProperties, UseDatabaseSchema);
 
-			//TableDefinition td = Load(t);
-			//TableName = td.TableName;
-			//Columns = td.Columns;
-		}
+        //    //TableDefinition td = Load(t);
+        //    //TableName = td.TableName;
+        //    //Columns = td.Columns;
+        //}
 
-		public void Load(Type t, bool useCache = true, bool includePrivateProperties = false)
+        public TableDefinition(Type t, OpenOrmDbConnection cnx)
         {
-			if(useCache && Cache.ContainsKey($"{DbServerName}.{DbName}.{t.FullName}"))
+            if (Cache == null)
             {
-				TableDefinition cached = Cache[$"{DbServerName}.{DbName}.{t.FullName}"];
+                Cache = new ConcurrentDictionary<string, TableDefinition>();
+            }
+
+            Columns = new List<ColumnDefinition>();
+            NestedColumns = new List<ColumnDefinition>();
+            ForeignKeys = new List<ColumnDefinition>();
+
+            Load(t, cnx);
+
+            //TableDefinition td = Load(t);
+            //TableName = td.TableName;
+            //Columns = td.Columns;
+        }
+
+        //public void Load(Type t, bool useCache = true, bool includePrivateProperties = false, bool mapColumnsFromDb = false)
+        public void Load(Type t, OpenOrmDbConnection cnx)
+        {
+			if(cnx.Configuration.UseSchemaCache && Cache.ContainsKey($"{cnx.ConnectionString}.{t.FullName}"))
+            {
+				TableDefinition cached = Cache[$"{cnx.ConnectionString}.{t.FullName}"];
 				TableName = cached.TableName;
 				Columns = cached.Columns;
 				NestedColumns = cached.NestedColumns;
 				ForeignKeys = cached.ForeignKeys;
 				PrimaryKeysCount = cached.PrimaryKeysCount;
-			}
+				ModelType = cached.ModelType;
+				ExistsInDb = cached.ExistsInDb;
+            }
 			else
             {
 				Columns = new List<ColumnDefinition>();
-				List<PropertyInfo> properties = OpenOrmTools.GetValidProperties(t, includePrivateProperties);
+				List<PropertyInfo> properties = OpenOrmTools.GetValidProperties(t, cnx.Configuration.MapPrivateProperties);
 				TableName = OpenOrmTools.GetTableName(t);
-				//ExistsInDb = DbDefinition.Definitions.ContainsKey(TableName);
+				ModelType = t;
 
-				foreach (PropertyInfo pi in properties)
+                TableDefinition td_temp = DbDefinition.Definitions[cnx.ConnectionString].FirstOrDefault(x => x.TableName.ToLower() == TableName.ToLower());
+
+                ExistsInDb = td_temp != null;
+
+                foreach (PropertyInfo pi in properties)
 				{
-					ColumnDefinition coldef = new ColumnDefinition(pi, useCache);
+					ColumnDefinition coldef = new ColumnDefinition(pi, cnx.Configuration.UseSchemaCache);
 					coldef.TableDefinition = this;
+
+					coldef.ExistsInDb = true;
+                    if (cnx.Configuration.UseDatabaseSchema && DbDefinition.Definitions.ContainsKey(cnx.ConnectionString))
+					{
+						coldef.ExistsInDb = false;
+						
+						if(td_temp != null)
+						{
+                            coldef.ExistsInDb = td_temp.Columns.Any(x => x.Name.ToLower() == coldef.Name.ToLower());
+                        }
+                    }
+
 					Columns.Add(coldef);
 
 					if (coldef.IsPrimaryKey) PrimaryKeysCount++;
 				}
 
 				NestedColumns = new List<ColumnDefinition>();
-				List<PropertyInfo> nestedProperties = OpenOrmTools.GetNestedProperties(t, includePrivateProperties);
+				List<PropertyInfo> nestedProperties = OpenOrmTools.GetNestedProperties(t, cnx.Configuration.MapPrivateProperties);
 				foreach (PropertyInfo pi in nestedProperties)
 				{
-					NestedColumns.Add(new ColumnDefinition(pi, useCache));
+					NestedColumns.Add(new ColumnDefinition(pi, cnx.Configuration.UseSchemaCache));
 				}
 
 				ForeignKeys = new List<ColumnDefinition>();
-				List<PropertyInfo> foreignKeyProperties = OpenOrmTools.GetForeignKeyProperties(t, includePrivateProperties);
+				List<PropertyInfo> foreignKeyProperties = OpenOrmTools.GetForeignKeyProperties(t, cnx.Configuration.MapPrivateProperties);
 				foreach (PropertyInfo pi in foreignKeyProperties)
 				{
-					ForeignKeys.Add(new ColumnDefinition(pi, useCache));
+					ForeignKeys.Add(new ColumnDefinition(pi, cnx.Configuration.UseSchemaCache));
 				}
 
 				if (PrimaryKeysCount == 0)
@@ -112,18 +153,28 @@ namespace OpenOrm.Schema
 					throw new KeyNotFoundException($"Model '{t.Name}' must have a primary key. Use Attribute [DbPrimaryKey] or [DbPrimaryKey, DbAutoIncrement] on a property.");
 				}
 
-				if (useCache) Cache[$"{DbServerName}.{DbName}.{t.FullName}"] = this;
+				if (cnx.Configuration.UseSchemaCache) Cache[$"{cnx.ConnectionString}.{t.FullName}"] = this;
             }
 		}
 
-        public static TableDefinition Get<T>(bool useCache = true, bool includePrivateProperties = false)
+        //public static TableDefinition Get<T>(bool useCache = true, bool includePrivateProperties = false)
+        //{
+        //    return Get(typeof(T), useCache, includePrivateProperties);
+        //}
+
+        //public static TableDefinition Get(Type t, bool useCache = true, bool includePrivateProperties = false)
+        //{
+        //    return new TableDefinition(t, useCache, includePrivateProperties);
+        //}
+
+        public static TableDefinition Get<T>(OpenOrmDbConnection cnx)
         {
-            return Get(typeof(T), useCache, includePrivateProperties);
+            return Get(typeof(T), cnx);
         }
 
-        public static TableDefinition Get(Type t, bool useCache = true, bool includePrivateProperties = false)
+        public static TableDefinition Get(Type t, OpenOrmDbConnection cnx)
         {
-            return new TableDefinition(t, useCache, includePrivateProperties);
+            return new TableDefinition(t, cnx);
         }
 
         public string GetColumnNameFor(PropertyInfo pi)
@@ -133,19 +184,60 @@ namespace OpenOrm.Schema
 			return pi.Name;
 		}
 
-		public string GetFieldsStr(bool withBrackets = true)
+		public string GetFieldsStr(bool withBrackets = true, char leftBracket = '[', char rightBracket = ']')
         {
 			if(withBrackets)
             {
-				return "[" + string.Join("],[", Columns.Select(x => x.Name)) + "]";
+				return leftBracket + string.Join($"{rightBracket},{leftBracket}", Columns.Where(x => x.ExistsInDb).Select(x => x.Name)) + rightBracket;
 			}
 			else
             {
-				return string.Join(",", Columns.Select(x => x.Name));
+				return string.Join(",", Columns.Where(x => x.ExistsInDb).Select(x => x.Name));
 			}
         }
 
+		public static void AddToCache(string connectionString, List<TableDefinition> tds)
+		{
+			foreach(var td in tds)
+			{
+				Cache[$"{connectionString}.{td.ModelType.FullName}"] = td;
+            }
+        }
 
+		public static void AddToCache(string connectionString, TableDefinition td)
+		{
+            Cache[$"{connectionString}.{td.ModelType.FullName}"] = td;
+        }
+
+		public static void DbDefinitionChanged(string connectionString)
+		{
+            if (Cache == null)
+            {
+                Cache = new ConcurrentDictionary<string, TableDefinition>();
+            }
+
+            foreach (var td in Cache.Where(x => x.Key.StartsWith($"{connectionString}.")).Select(x => x.Value))
+			{
+                TableDefinition dbtd = DbDefinition.Definitions[connectionString].FirstOrDefault(x => x.TableName.ToLower() == td.TableName.ToLower());
+				if(dbtd != null)
+				{
+                    td.ExistsInDb = true;
+
+					foreach(var col in td.Columns)
+					{
+                        col.ExistsInDb = dbtd.Columns.Any(x => x.Name.ToLower() == col.Name.ToLower());
+                    }
+                }
+				else
+				{
+					td.ExistsInDb = false;
+                    foreach (var col in td.Columns)
+                    {
+                        col.ExistsInDb = false;
+                    }
+                }
+            }
+		}
 		//public SqlCommand GetInsertCommand(OpenOrmDbConnection cnx)
 		//{
 		//	SqlCommand cmd = new SqlCommand();

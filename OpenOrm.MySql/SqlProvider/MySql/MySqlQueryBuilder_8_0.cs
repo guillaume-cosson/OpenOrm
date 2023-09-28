@@ -19,7 +19,7 @@ namespace OpenOrm.SqlProvider.MySql
     public class MySqlQueryBuilder_8_0 : MySqlQueryBuilderBase, ISqlQueryBuilder
     {
         #region Constructor
-        public MySqlQueryBuilder_8_0(OpenOrmConfigurationBase config) : base(config) { }
+        public MySqlQueryBuilder_8_0(OpenOrmDbConnection cnx) : base(cnx) { }
         #endregion
 
         #region Table
@@ -31,81 +31,87 @@ namespace OpenOrm.SqlProvider.MySql
         
         public new void CreateTable(OpenOrmDbConnection cnx, Type modelType)
         {
-            List<string> primaryKeys = new List<string>();
-            List<string> columns = new List<string>();
-            List<string> colNames = new List<string>();
-            TableDefinition td = TableDefinition.Get(modelType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-
-            if(cnx.Configuration.PutIdFieldAtFirstPosition)
+            if(!cnx.TableExists(GetTableName(modelType)))
             {
-                var idColumn = td.Columns.FindIndex(c => c.Name.Equals("id", StringComparison.CurrentCultureIgnoreCase));
-                if(idColumn != -1)
+                List<string> primaryKeys = new List<string>();
+                List<string> columns = new List<string>();
+                List<string> colNames = new List<string>();
+                TableDefinition td = TableDefinition.Get(modelType, cnx);
+
+                if (cnx.Configuration.PutIdFieldAtFirstPosition)
                 {
-                    var item = td.Columns[idColumn];
-                    td.Columns.RemoveAt(idColumn);
-                    td.Columns.Insert(0, item);
-                }
-            }
-
-            string sql = $"CREATE TABLE `{GetTableName(modelType)}` (";
-
-            foreach (ColumnDefinition cd in td.Columns)
-            {
-                string fieldsql = $" `{cd.Name}` {MySqlTools.ToStringType(cd.PropertyType.GetBaseType(), cd.Size)}";
-
-                if (cd.IsPrimaryKey)
-                {
-                    if(td.Columns.Where(x => x.IsPrimaryKey).Count() == 1)
+                    var idColumn = td.Columns.FindIndex(c => c.Name.Equals("id", StringComparison.CurrentCultureIgnoreCase));
+                    if (idColumn > 0)
                     {
-                        fieldsql += " PRIMARY KEY";
+                        var item = td.Columns[idColumn];
+                        td.Columns.RemoveAt(idColumn);
+                        td.Columns.Insert(0, item);
                     }
-                    
-                    primaryKeys.Add($"`{cd.Name}`");
                 }
 
-                if (cd.IsAutoIncrement)
+                string sql = $"CREATE TABLE `{GetTableName(modelType)}` (";
+
+                foreach (ColumnDefinition cd in td.Columns)
                 {
+                    string fieldsql = $" `{cd.Name}` {MySqlTools.ToStringType(cd.PropertyType.GetBaseType(), cd.Size)}";
 
-                    fieldsql += " AUTO_INCREMENT";
+                    if (cd.IsPrimaryKey)
+                    {
+                        if (td.Columns.Where(x => x.IsPrimaryKey).Count() == 1)
+                        {
+                            fieldsql += " PRIMARY KEY";
+                        }
+
+                        primaryKeys.Add($"`{cd.Name}`");
+                    }
+
+                    if (cd.IsAutoIncrement)
+                    {
+
+                        fieldsql += " AUTO_INCREMENT";
+                    }
+
+                    if (cd.IsNotNullColumn || (cd.IsPrimaryKey && !cd.IsAutoIncrement))
+                    {
+                        fieldsql += " NOT NULL";
+                    }
+
+                    if (cd.IsUnique && !cd.IsAutoIncrement && !cd.IsPrimaryKey)
+                    {
+                        fieldsql += " UNIQUE";
+                    }
+
+                    if (!string.IsNullOrEmpty(fieldsql))
+                    {
+                        columns.Add(fieldsql);
+                        colNames.Add(cd.Name);
+                    }
                 }
 
-                if (cd.IsNotNullColumn || (cd.IsPrimaryKey && !cd.IsAutoIncrement))
+                string fields = string.Join(",", columns);
+                sql += fields;
+
+                if (td.Columns.Where(x => x.IsPrimaryKey).Count() > 1)
                 {
-                    fieldsql += " NOT NULL";
+                    sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
                 }
 
-                if (cd.IsUnique && !cd.IsAutoIncrement && !cd.IsPrimaryKey)
+                var foreigns = td.Columns.Where(x => x.IsForeignKey);
+                foreach (var foreign in foreigns)
                 {
-                    fieldsql += " UNIQUE";
+                    sql += $" , FOREIGN KEY (`{foreign.Name}`) REFERENCES `{OpenOrmTools.GetTableName(foreign.ForeignType)}` (`{foreign.ParentForeignKeyProperty}`) ON UPDATE {OpenOrmTools.GetDescription(foreign.ForeignOnUpdate)} ON DELETE {OpenOrmTools.GetDescription(foreign.ForeignOnDelete)}";
                 }
 
-                if (!string.IsNullOrEmpty(fieldsql))
-                {
-                    columns.Add(fieldsql);
-                    colNames.Add(cd.Name);
-                }
+                sql += ");";
+
+                SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
+                SqlQuery.Execute(cnx, $"ALTER DATABASE {cnx.ConnectionString.GetStringBetween("database=", ";")} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; ALTER TABLE `{GetTableName(modelType)}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", SqlQueryType.Sql);
+
+                //Create default index for the table
+                //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({string.Join(",", colNames)});", SqlQueryType.Sql);
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
-
-            string fields = string.Join(",", columns);
-            sql += fields;
-
-            if(td.Columns.Where(x => x.IsPrimaryKey).Count() > 1)
-            {
-                sql += $" , PRIMARY KEY ({string.Join(",", primaryKeys)})";
-            }
-
-            var foreigns = td.Columns.Where(x => x.IsForeignKey);
-            foreach(var foreign in foreigns)
-            {
-                sql += $" , FOREIGN KEY (`{foreign.Name}`) REFERENCES `{OpenOrmTools.GetTableName(foreign.ForeignType)}` (`{foreign.ParentForeignKeyProperty}`) ON UPDATE {OpenOrmTools.GetDescription(foreign.ForeignOnUpdate)} ON DELETE {OpenOrmTools.GetDescription(foreign.ForeignOnDelete)}";
-            }
-
-            sql += ");";
-
-            SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
-
-            //Create default index for the table
-            //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({string.Join(",", colNames)});", SqlQueryType.Sql);
         }
 
 

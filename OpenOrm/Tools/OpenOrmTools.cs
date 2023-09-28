@@ -4,8 +4,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Xml.Linq;
 
 namespace OpenOrm
 {
@@ -15,17 +19,44 @@ namespace OpenOrm
 		public static IEnumerable<T> GetEnumerableOfType<T>(params object[] constructorArgs) where T : class//, IComparable<T>
 		{
 			List<T> objects = new List<T>();
-			foreach (Type type in
-				Assembly.GetAssembly(typeof(T)).GetTypes()
-				.Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(T))))
+            Type targetType = typeof(T);
+            TypeInfo ti = typeof(T).GetTypeInfo();
+
+            foreach (Type type in Assembly.GetAssembly(typeof(T)).GetTypes())
 			{
-				objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+                if ((ti.IsClass && type.IsSubclassOf(targetType))
+					|| (ti.IsInterface && type.IsClass && (type.GetInterfaces().Contains(targetType) || type.IsAssignableFrom(targetType)))
+					|| (type.GetCustomAttributes(typeof(T), true).Any()))
+                {
+                    if (type.FullName.StartsWithOr("System.", "Microsoft.")) continue;
+                    objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+                }
 			}
-			//objects.Sort();
+
 			return objects;
 		}
 
-		public static IEnumerable<T> GetEnumerableOfTypeFromEntryAssembly<T>(params object[] constructorArgs) where T : class//, IComparable<T>
+		public static IEnumerable<object> GetEnumerableOfTypeWithAttribute<T>(params object[] constructorArgs) where T : class//, IComparable<T>
+		{
+			List<object> result = new List<object>();
+            Type targetType = typeof(T);
+            TypeInfo ti = typeof(T).GetTypeInfo();
+
+            foreach (Type type in Assembly.GetAssembly(typeof(T)).GetTypes())
+			{
+                if ((ti.IsClass && type.IsSubclassOf(targetType))
+                    || (ti.IsInterface && type.IsClass && (type.GetInterfaces().Contains(targetType) || type.IsAssignableFrom(targetType)))
+                    || (type.GetCustomAttributes(typeof(T), true).Any()))
+                {
+                    if (type.FullName.StartsWithOr("System.", "Microsoft.")) continue;
+                    result.Add(Activator.CreateInstance(type, constructorArgs));
+                }
+			}
+			
+			return result;
+		}
+
+        public static IEnumerable<T> GetEnumerableOfTypeFromEntryAssembly<T>(params object[] constructorArgs) where T : class//, IComparable<T>
         {
 			//	var callerAssemblies = new StackTrace().GetFrames().Select(x => x.GetMethod().ReflectedType.Assembly).Distinct().ToList();
 			//	callerAssemblies = callerAssemblies.Where(x => x.GetReferencedAssemblies().Any(y => y.FullName == Assembly.GetCallingAssembly().FullName)).ToList();
@@ -37,36 +68,97 @@ namespace OpenOrm
 
 			Type targetType = typeof(T);
 
-			//types = Assembly.GetEntryAssembly().GetTypes().Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(targetType)).ToList();
+            //types = Assembly.GetEntryAssembly().GetTypes().Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(targetType)).ToList();
 
-			types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes()).Where(type => 
-				ti.IsClass ? type.IsSubclassOf(targetType) :
-				ti.IsInterface ? (type.GetInterfaces().Contains(targetType) || type.IsAssignableFrom(targetType)) && type.IsClass : 
-			false).ToList();
+            //types = AppDomain.CurrentDomain.GetAssemblies().Where(x => !x.FullName.StartsWith("System.") && !x.FullName.StartsWith("Microsoft.")).SelectMany(assembly => assembly.GetTypes()).Where(type => 
+            //	ti.IsClass ? type.IsSubclassOf(targetType) :
+            //	ti.IsInterface ? (type.GetInterfaces().Contains(targetType) || type.IsAssignableFrom(targetType)) && type.IsClass :
 
-
-			//var platform = Environment.OSVersion.Platform.ToString();
-			//var runtimeAssemblyNames = DependencyContext.Default.GetRuntimeAssemblyNames(platform);
-			//types = runtimeAssemblyNames.Select(Assembly.Load).SelectMany(a => a.ExportedTypes).Where(t => typeof(T).IsAssignableFrom(t));
-
-			//types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes()).Where(type => type.IsSubclassOf(targetType)).ToList();
-
-			//types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes()).Where(type => type.GetInterfaces().Contains(targetType)).ToList();
-
-			//types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetExportedTypes()).Where(type => type.IsSubclassOf(targetType)).ToList();
+            //          type.GetCustomAttributes(typeof(T), true).Any()).ToList();
 
 
-			foreach (Type type in types)
-			{
-				if (type.FullName == "System.Object") continue;
-				objects.Add((T)Activator.CreateInstance(type, constructorArgs));
-			}
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies().Where(x => !x.FullName.StartsWith("System.") && !x.FullName.StartsWith("Microsoft."));
+            foreach (var assembly in assemblies)
+            {
+                var assembly_types = assembly.GetTypes();
+                foreach (var type in assembly_types)
+                {
+                    if ((ti.IsClass && type.IsSubclassOf(targetType))
+                    || (ti.IsInterface && type.IsClass && (type.GetInterfaces().Contains(targetType) || type.IsAssignableFrom(targetType)))
+                    || (type.GetCustomAttributes(typeof(T), true).Any()))
+                    {
+                        if (type.FullName.StartsWithOr("System.", "Microsoft.")) continue;
+                        objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+                    }
+                }
+            }
+
+
+            //var platform = Environment.OSVersion.Platform.ToString();
+            //var runtimeAssemblyNames = DependencyContext.Default.GetRuntimeAssemblyNames(platform);
+            //types = runtimeAssemblyNames.Select(Assembly.Load).SelectMany(a => a.ExportedTypes).Where(t => typeof(T).IsAssignableFrom(t));
+
+            //types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes()).Where(type => type.IsSubclassOf(targetType)).ToList();
+
+            //types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes()).Where(type => type.GetInterfaces().Contains(targetType)).ToList();
+
+            //types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetExportedTypes()).Where(type => type.IsSubclassOf(targetType)).ToList();
+
+
+   //         foreach (Type type in types)
+			//{
+			//	if (type.FullName.StartsWithOr("System.", "Microsoft.")) continue;
+			//	objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+			//}
 
 
 			//objects.Sort();
 
 			return objects;
 		}
+
+
+        public static IEnumerable<object> GetEnumerableOfTypeFromEntryAssemblyWithAttribute<T>(params object[] constructorArgs) where T : class//, IComparable<T>
+        {
+			TypeInfo ti = typeof(T).GetTypeInfo();
+			List<object> objects = new List<object>();
+			Type targetType = typeof(T);
+
+			var assemblies = AppDomain.CurrentDomain.GetAssemblies().Where(x => !x.FullName.StartsWith("System.") && !x.FullName.StartsWith("Microsoft."));
+			
+			foreach(var assembly in assemblies)
+			{
+				var assembly_types = assembly.GetTypes();
+				foreach(var type in assembly_types)
+				{
+                    if (type.FullName.StartsWithOr("System.", "Microsoft.")) continue;
+                    if ((ti.IsClass && type.IsSubclassOf(targetType))
+						|| (ti.IsInterface && type.IsClass && (type.GetInterfaces().Contains(targetType) || type.IsAssignableFrom(targetType)))
+						|| (type.GetCustomAttributes(typeof(T), true).Any()))
+					{
+                        objects.Add(Activator.CreateInstance(type, constructorArgs));
+                    }
+				}
+            }
+
+			return objects;
+		}
+
+
+		public static IEnumerable<T> GetEnumerableOfTypeFromAssembly<T>(this Assembly a, params object[] constructorArgs) where T : class
+        {
+            List<T> objects = new List<T>();
+            foreach (Type type in a.GetTypes())
+            {
+				if(type.IsClass && !type.IsAbstract
+					&& (type.IsSubclassOf(typeof(T)) || type.GetInterfaces().Contains(typeof(T)) || type.GetCustomAttributes(typeof(T), true).Any()))
+				{
+                    objects.Add((T)Activator.CreateInstance(type, constructorArgs));
+                }
+            }
+            //objects.Sort();
+            return objects;
+        }
 
 		//public static List<string> GetReferences(string dll = "")
 		//{
@@ -452,7 +544,78 @@ namespace OpenOrm
 			return SqlDbType.NVarChar;
 		}
 
-		public static SqlDbType SqlDbTypeFromString(string db_type_name)
+        public static SqlDbType ToSqlDbType(string typeName)
+        {
+			string t = typeName.ToLower();
+            if (t == "nvarchar")
+            {
+                return SqlDbType.NVarChar;
+            }
+			else if(t == "text" || t == "varchar")
+			{
+				return SqlDbType.VarChar;
+			}
+            else if (t == "int")
+            {
+                return SqlDbType.Int;
+            }
+            else if (t == "bigint" || t == "integer")
+            {
+                return SqlDbType.BigInt;
+            }
+            else if (t == "bit")
+            {
+                return SqlDbType.Bit;
+            }
+            else if (t == "datetime")
+            {
+                return SqlDbType.DateTime;
+            }
+            else if (t == "float")
+            {
+                return SqlDbType.Float;
+            }
+            else if (t == "decimal")
+            {
+                return SqlDbType.Decimal;
+            }
+            else if (t == "char")
+            {
+                return SqlDbType.Char;
+            }
+            else if (t == "smallint")
+            {
+                return SqlDbType.SmallInt;
+            }
+            else if (t == "tinyint")
+            {
+                return SqlDbType.TinyInt;
+            }
+            else if (t == "varbinary")
+            {
+                return SqlDbType.VarBinary;
+            }
+            else if (t == "binary")
+            {
+                return SqlDbType.Binary;
+            }
+            else if (t == "time")
+            {
+                return SqlDbType.Time;
+            }
+            else if (t == "date")
+            {
+                return SqlDbType.Date;
+            }
+            else if (t == "uniqueidentifier")
+            {
+                return SqlDbType.UniqueIdentifier;
+            }
+
+            return SqlDbType.NVarChar;
+        }
+
+        public static SqlDbType SqlDbTypeFromString(string db_type_name)
 		{
 			foreach (SqlDbType value in Enum.GetValues(typeof(SqlDbType)))
 			{

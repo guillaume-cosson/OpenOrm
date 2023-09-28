@@ -19,11 +19,30 @@ namespace OpenOrm.SqlProvider.SQLite
     public class SQLiteQueryBuilder : BaseQueryBuilder, ISqlQueryBuilder
     {
         #region Constructor
-        public SQLiteQueryBuilder(OpenOrmConfigurationBase config)
+        private static bool loadingDefinition = false;
+        public SQLiteQueryBuilder(OpenOrmDbConnection cnx)
         {
-            if (config == null) config = new OpenOrmConfiguration();
-            config.ConnectorProvider = new SQLiteConnector();
-            Configuration = config;
+            if (cnx.Configuration == null) cnx.Configuration = new OpenOrmConfiguration();
+            cnx.Configuration.ConnectorProvider = new SQLiteConnector();
+            Configuration = cnx.Configuration;
+
+            InitDatabaseSchemaMapping(cnx);
+        }
+
+        protected void InitDatabaseSchemaMapping(OpenOrmDbConnection cnx, bool reinit = false)
+        {
+            if (reinit)
+            {
+                DbDefinition.Clear(cnx.ConnectionString);
+            }
+            if (cnx.Configuration.UseDatabaseSchema && (DbDefinition.Definitions == null || !DbDefinition.Definitions.ContainsKey(cnx.ConnectionString)) && !loadingDefinition)
+            {
+                loadingDefinition = true;
+                var tds = cnx.GetTablesDefinitionsFromDb();
+                DbDefinition.SetDbDefinition(cnx.ConnectionString, tds);
+                TableDefinition.DbDefinitionChanged(cnx.ConnectionString);
+                loadingDefinition = false;
+            }
         }
         #endregion
 
@@ -36,63 +55,68 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public void CreateTable(OpenOrmDbConnection cnx, Type modelType)
         {
-            List<string> primaryKeys = new List<string>();
-            List<string> columns = new List<string>();
-            List<string> colNames = new List<string>();
-            TableDefinition td = TableDefinition.Get(modelType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-
-            string sql = $"CREATE TABLE {GetTableName(modelType)} (";
-
-            foreach (ColumnDefinition cd in td.Columns)
+            if(!cnx.TableExists(GetTableName(modelType)))
             {
-                string fieldsql = $" [{cd.Name}] {SQLiteTools.ToStringType(cd.PropertyType.GetBaseType())}";
+                List<string> primaryKeys = new List<string>();
+                List<string> columns = new List<string>();
+                List<string> colNames = new List<string>();
+                TableDefinition td = TableDefinition.Get(modelType, cnx);
 
-                if (cd.IsPrimaryKey)
+                string sql = $"CREATE TABLE {GetTableName(modelType)} (";
+
+                foreach (ColumnDefinition cd in td.Columns)
                 {
-                    if(cd.IsAutoIncrement)
+                    string fieldsql = $" [{cd.Name}] {SQLiteTools.ToStringType(cd.PropertyType.GetBaseType())}";
+
+                    if (cd.IsPrimaryKey)
                     {
-                        fieldsql += " PRIMARY KEY";
+                        if (cd.IsAutoIncrement)
+                        {
+                            fieldsql += " PRIMARY KEY";
+                        }
+
+                        primaryKeys.Add(cd.Name);
                     }
 
-                    primaryKeys.Add(cd.Name);
+                    if (cd.IsNotNullColumn || (cd.IsPrimaryKey && !cd.IsAutoIncrement))
+                    {
+                        fieldsql += " NOT NULL";
+                    }
+
+                    if (cd.IsAutoIncrement)
+                    {
+                        fieldsql += " AUTOINCREMENT";
+                    }
+
+                    if (cd.IsUnique && !cd.IsAutoIncrement && !cd.IsPrimaryKey)
+                    {
+                        fieldsql += " UNIQUE";
+                    }
+
+                    if (!string.IsNullOrEmpty(fieldsql))
+                    {
+                        columns.Add(fieldsql);
+                        colNames.Add(cd.Name);
+                    }
                 }
 
-                if (cd.IsNotNullColumn || (cd.IsPrimaryKey && !cd.IsAutoIncrement))
+                string fields = string.Join(",", columns);
+                sql += fields;
+
+                if (primaryKeys.Count > 1)
                 {
-                    fieldsql += " NOT NULL";
+                    sql += $" ,UNIQUE ({string.Join(",", primaryKeys)})";
                 }
 
-                if (cd.IsAutoIncrement)
-                {
-                    fieldsql += " AUTOINCREMENT";
-                }
+                sql += ");";
 
-                if (cd.IsUnique && !cd.IsAutoIncrement && !cd.IsPrimaryKey)
-                {
-                    fieldsql += " UNIQUE";
-                }
+                SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
 
-                if (!string.IsNullOrEmpty(fieldsql))
-                {
-                    columns.Add(fieldsql);
-                    colNames.Add(cd.Name);
-                }
+                //Create default index for the table
+                //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({string.Join(",", colNames)});", SqlQueryType.Sql);
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
-
-            string fields = string.Join(",", columns);
-            sql += fields;
-
-            if(primaryKeys.Count > 1)
-            {
-                sql += $" ,UNIQUE ({string.Join(",", primaryKeys)})";
-            }
-
-            sql += ");";
-
-            SqlQuery.Execute(cnx, sql, SqlQueryType.Sql);
-
-            //Create default index for the table
-            //SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({string.Join(",", colNames)});", SqlQueryType.Sql);
         }
 
         public bool TableExists<T>(OpenOrmDbConnection cnx)
@@ -151,10 +175,15 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public void DropTable(OpenOrmDbConnection cnx, string tableName)
         {
-            SqlQuery sq = new SqlQuery(cnx);
-            //sq.ExecuteSql(cnx, $"DROP INDEX IF EXISTS {tableName}_INDEX ON {DefaultSchema}.{tableName}");
-            sq.ExecuteSql(cnx, $"DROP TABLE {tableName}");
-            sq.Dispose();
+            if(cnx.TableExists(tableName))
+            {
+                SqlQuery sq = new SqlQuery(cnx);
+                //sq.ExecuteSql(cnx, $"DROP INDEX IF EXISTS {tableName}_INDEX ON {DefaultSchema}.{tableName}");
+                sq.ExecuteSql(cnx, $"DROP TABLE {tableName}");
+                sq.Dispose();
+
+                InitDatabaseSchemaMapping(cnx, true);
+            }
         }
 
         public void TruncateTable<T>(OpenOrmDbConnection cnx)
@@ -167,7 +196,77 @@ namespace OpenOrm.SqlProvider.SQLite
             SqlQuery.Execute(cnx, $"DELETE FROM {GetTableName(modelType)}; VACUUM;");
         }
 
+        public List<TableDefinition> GetTablesDefinitionsFromDb(OpenOrmDbConnection cnx)
+        {
+            List<TableDefinition> result = new List<TableDefinition>();
 
+            string sql = @"
+                SELECT m.type, m.tbl_name AS 'TABLE_NAME', p.name AS 'COLUMN_NAME', p.type AS 'DATA_TYPE', (NOT p.[notnull] AND NOT p.pk) AS 'IS_NULLABLE', p.dflt_value AS 'COLUMN_DEFAULT', p.pk AS 'IS_IDENTITY', (p.name = replace( substr(trim(substr(trim(substr(sql, instr(sql, '(') + 1)), 0, instr(trim(substr(sql, instr(sql, '(') + 1)), 'AUTOINCREMENT') + 1)), 0, instr(trim(substr(trim(substr(sql, instr(sql, '(') + 1)), 0, instr(trim(substr(sql, instr(sql, '(') + 1)), 'AUTOINCREMENT') + 1)), ']')) , '[', '')) AS 'IS_AUTOINCREMENT'
+                FROM sqlite_master m
+                left outer join pragma_table_info((m.name)) p on m.name <> p.name
+                WHERE m.type = 'table' 
+                AND m.tbl_name NOT LIKE 'sqlite_%'";
+
+            SqlQuery sq = new SqlQuery();
+            SqlResult r = sq.Read(cnx, sql, SqlQueryType.Sql);
+
+            if (r.HasRows)
+            {
+                List<string> tables = r.Rows.Select(x => x.Get("TABLE_NAME")).Distinct().ToList();
+                foreach (string table in tables)
+                {
+                    //if (table == "OpenOrmMigration")
+                    //{
+                    //    continue;
+                    //}
+                    //TableDefinition td = GetTableDefinitionFromDb(cnx, table);
+                    TableDefinition td = new TableDefinition();
+                    td.TableName = table;
+                    td.ExistsInDb = true;
+
+                    foreach (var row in r.Rows.Where(x => x.Get("TABLE_NAME") == table))
+                    {
+                        ColumnDefinition cd = new ColumnDefinition
+                        {
+                            TableDefinition = td,
+                            Name = row.Get("COLUMN_NAME"),
+                            SqlDbType = OpenOrmTools.ToSqlDbType(row.Get("DATA_TYPE")),
+                            DbType = OpenOrmTools.ToSqlDbType(row.Get("DATA_TYPE")).ToDbType(),
+                            ExistsInDb = true,
+                            IsPrimaryKey = row.Get("IS_IDENTITY").ToBool(),
+                            IsAutoIncrement = row.Get("IS_AUTOINCREMENT").ToBool(),
+                            DefaultValue = row.Row["COLUMN_DEFAULT"],
+                            HasDefaultValue = row.Row["COLUMN_DEFAULT"] != null,
+                            IsNotNullColumn = !row.Get("IS_NULLABLE").ToBool(),
+                            //Size = row.Get("SIZE").ToInt(),
+                            //HasSize = row.Row["SIZE"] != null,
+                            //Precision = row.Get("PRECISION").ToInt(),
+                            //Scale = row.Get("SCALE").ToInt(),
+
+                        };
+
+                        cd.HasSize = cd.DbType == System.Data.DbType.String && cd.Size > -1;
+                        cd.HasDecimalSize = cd.DbType != System.Data.DbType.Int32 && cd.DbType != System.Data.DbType.Int64 && cd.Precision > 0;
+
+                        td.Columns.Add(cd);
+                    }
+
+                    result.Add(td);
+                }
+            }
+
+            return result;
+        }
+
+        public TableDefinition GetTableDefinitionFromType<T>(OpenOrmDbConnection cnx)
+        {
+            return TableDefinition.Get(typeof(T), cnx);
+        }
+
+        public TableDefinition GetTableDefinitionFromType(OpenOrmDbConnection cnx, Type objType)
+        {
+            return TableDefinition.Get(objType.GetType(), cnx);
+        }
         #endregion
 
         #region Column
@@ -194,6 +293,8 @@ namespace OpenOrm.SqlProvider.SQLite
             if (!ColumnExists(cnx, modelType, colDef.Name))
             {
                 SqlQuery.Execute(cnx, $"ALTER TABLE {GetTableName(modelType)} ADD COLUMN [{colDef.Name}] {SQLiteTools.ToStringType(colDef.PropertyType.GetBaseType())}; ");
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
         }
 
@@ -237,6 +338,8 @@ namespace OpenOrm.SqlProvider.SQLite
                 DropTable(cnx, GetTableName(modelType));
                 SqlQuery.Execute(cnx, $"ALTER TABLE {temp_table} RENAME TO {GetTableName(modelType)};", SqlQueryType.Sql);
                 SqlQuery.Execute(cnx, $"CREATE INDEX {GetTableName(modelType)}_INDEX ON {GetTableName(modelType)}({names});", SqlQueryType.Sql);
+
+                InitDatabaseSchemaMapping(cnx, true);
             }
         }
         #endregion
@@ -254,9 +357,9 @@ namespace OpenOrm.SqlProvider.SQLite
             SqlQuery sq = new SqlQuery();
             List<string> columns = new List<string>();
             List<string> values = new List<string>();
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
 
-            foreach(ColumnDefinition cd in td.Columns)
+            foreach(ColumnDefinition cd in td.Columns.Where(x => x.ExistsInDb || !cnx.Configuration.UseDatabaseSchema))
             {
                 var value = cd.PropertyInfo.GetValue(model);
                 if (value == null && cd.IsNotNullColumn && cd.HasDefaultValue)
@@ -292,7 +395,7 @@ namespace OpenOrm.SqlProvider.SQLite
             {
                 List<string> columns = new List<string>();
                 List<string> values;
-                TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                TableDefinition td = TableDefinition.Get<T>(cnx);
 
                 int chunkSize = (1000 / td.Columns.Count) - 1;
 
@@ -300,25 +403,25 @@ namespace OpenOrm.SqlProvider.SQLite
                 {
                     string sql = "BEGIN TRANSACTION; ";
 
-                    foreach(ColumnDefinition cd in td.Columns)
-                    {
-                        var value = cd.PropertyInfo.GetValue(models[0]);
+                    //foreach(ColumnDefinition cd in td.Columns)
+                    //{
+                    //    var value = cd.PropertyInfo.GetValue(models[0]);
 
-                        if (value != null)
-                        {
-                            if (!cd.IsAutoIncrement)
-                            {
-                                columns.Add(cd.Name);
-                            }
-                        }
-                    }
+                    //    if (value != null)
+                    //    {
+                    //        if (!cd.IsAutoIncrement)
+                    //        {
+                    //            columns.Add(cd.Name);
+                    //        }
+                    //    }
+                    //}
 
                     foreach (T model in submodels)
                     {
                         columns = new List<string>();
                         values = new List<string>();
 
-                        foreach(ColumnDefinition cd in td.Columns)
+                        foreach(ColumnDefinition cd in td.Columns.Where(x => x.ExistsInDb || !cnx.Configuration.UseDatabaseSchema))
                         {
                             var value = cd.PropertyInfo.GetValue(model);
 
@@ -351,7 +454,7 @@ namespace OpenOrm.SqlProvider.SQLite
         {
             if (cnx.Configuration.EnableRamCache && RamCache.Exists(RamCache.GetKey<T>())) return (List<T>)RamCache.Get(RamCache.GetKey<T>());
 
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()};";
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
             List<T> result = sq.ReadToObjectList<T>();
@@ -372,7 +475,7 @@ namespace OpenOrm.SqlProvider.SQLite
         {
             if (cnx.Configuration.EnableRamCache && RamCache.Exists(RamCache.GetKey<T>(predicate))) return (List<T>)RamCache.Get(RamCache.GetKey<T>(predicate));
 
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()} WHERE ";
 
             sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
@@ -395,8 +498,8 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public T SelectFirst<T>(OpenOrmDbConnection cnx, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()} WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()} ";
 
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
             T result = sq.ReadToObject<T>();
@@ -416,10 +519,15 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public T SelectFirst<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
-            string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()} WHERE ";
+            TableDefinition td = TableDefinition.Get<T>(cnx);
+            string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()} ";
 
-            sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
+            string whereclause = predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
+
+            if(!string.IsNullOrEmpty(whereclause))
+            {
+                sql += $" WHERE {whereclause}";
+            }
 
             SqlQuery sq = new SqlQuery(cnx, sql, SqlQueryType.Sql);
             Parameters.ForEach(x => sq.AddParameter(x.Name, x.Value, x.SqlDbType));
@@ -440,7 +548,7 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public T SelectLast<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             string sql = $"SELECT {td.GetFieldsStr()} FROM {GetTableName<T>()} WHERE ";
 
             sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
@@ -464,7 +572,7 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public T SelectById<T>(OpenOrmDbConnection cnx, object id, bool forceLoadNestedObjects = false)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             if (td.PrimaryKeys.Count == 0)
             {
                 throw new KeyNotFoundException($"PrimaryKey not found for model {typeof(T).FullName}");
@@ -500,7 +608,7 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public long Count<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             string sql = $"SELECT COUNT(rowid) FROM {GetTableName<T>()} WHERE ";
 
             sql += predicate.ToSqlWhere(td, out List<SqlParameterItem> Parameters);
@@ -521,7 +629,7 @@ namespace OpenOrm.SqlProvider.SQLite
             List<string> updateFields = new List<string>();
             List<string> keyFields = new List<string>();
             List<SqlParameterItem> parameters = new List<SqlParameterItem>();
-            if (td == null) td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            if (td == null) td = TableDefinition.Get<T>(cnx);
 
             foreach (ColumnDefinition cd in td.Columns)
             {
@@ -569,7 +677,7 @@ namespace OpenOrm.SqlProvider.SQLite
         {
             List<string> keyFields = new List<string>();
             List<SqlParameterItem> parameters = new List<SqlParameterItem>();
-            if (td == null) td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            if (td == null) td = TableDefinition.Get<T>(cnx);
 
             foreach (ColumnDefinition cd in td.Columns)
             {
@@ -617,7 +725,7 @@ namespace OpenOrm.SqlProvider.SQLite
 
         public void Delete<T>(OpenOrmDbConnection cnx, Expression<Func<T, bool>> predicate)
         {
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
             string sql = $"DELETE FROM {GetTableName<T>()} WHERE ";
 
             sql += predicate.ToSqlWhere(td, out var Parameters);
@@ -702,13 +810,13 @@ namespace OpenOrm.SqlProvider.SQLite
         {
             if (Result == null || (Result != null && Result.Count == 0)) return;
 
-            TableDefinition td = TableDefinition.Get<T>(cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+            TableDefinition td = TableDefinition.Get<T>(cnx);
 
             foreach (ColumnDefinition cd in td.NestedColumns)
             {
                 if (!cd.NestedAutoLoad && !forceLoad) continue;
 
-                TableDefinition nested_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                TableDefinition nested_td = TableDefinition.Get(cd.NestedChildType, cnx);
                 string fields = string.Join(",", nested_td.Columns.Select(x => x.Name));
 
                 if (cd.PropertyType.IsListOrArray())
@@ -731,7 +839,7 @@ namespace OpenOrm.SqlProvider.SQLite
                     //Load nested objects/values
                     if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
                     {
-                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx);
                         if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
                         {
                             LoadNestedValues(cnx, forceLoad, ref nested);
@@ -786,7 +894,7 @@ namespace OpenOrm.SqlProvider.SQLite
                     //Load nested objects/values
                     if (string.IsNullOrEmpty(cd.NestedChildPropertyToGet))
                     {
-                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx.Configuration.UseSchemaCache, cnx.Configuration.MapPrivateProperties);
+                        TableDefinition inner_td = TableDefinition.Get(cd.NestedChildType, cnx);
                         if (((inner_td.ContainsNestedColumns && forceLoad) || inner_td.ContainsNestedColumnsAutoLoad || cnx.Configuration.ForceAutoLoadNestedObjects) && nested != null)
                         {
                             LoadNestedValues(cnx, forceLoad, ref nested);

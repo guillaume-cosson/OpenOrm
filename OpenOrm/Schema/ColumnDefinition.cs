@@ -33,7 +33,7 @@ namespace OpenOrm.Schema
         public bool IsSizeMax { get; set; }
         public bool HasDecimalSize { get; set; }
         public bool HasDefaultValue { get; set; }
-        public bool ExistsInDb { get; set; }
+        public bool ExistsInDb { get; set; } = true;
         private object _defValue;
         public object DefaultValue 
         { 
@@ -127,6 +127,7 @@ namespace OpenOrm.Schema
                 ForeignAutoLoad = cached.ForeignAutoLoad;
                 ForeignOnDelete = cached.ForeignOnDelete;
                 ForeignOnUpdate = cached.ForeignOnUpdate;
+                ExistsInDb = cached.ExistsInDb;
             }
             else
             {

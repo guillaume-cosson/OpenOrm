@@ -72,11 +72,11 @@ namespace OpenOrm.SqlProvider.MySql
                 case SqlDbType.NVarChar:
                     if (size == -1) return "LONGTEXT";
                     if (size > 0) return $"NVARCHAR({size})";
-                    else return "NVARCHAR(4000)";
+                    else return "TEXT";
                 case SqlDbType.VarChar:
                     if (size == -1) return "LONGTEXT";
                     if (size > 0) return $"VARCHAR({size})";
-                    else return "VARCHAR(4000)";
+                    else return "TEXT";
                 case SqlDbType.Int:
                     return "INT";
                 case SqlDbType.BigInt:

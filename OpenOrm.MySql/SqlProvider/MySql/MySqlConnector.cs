@@ -4,11 +4,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using MySql.Data;
+//using MySql.Data;
 using System.Text;
 using System.Threading.Tasks;
-using MySql.Data.MySqlClient;
+//using MySql.Data.MySqlClient;
 using OpenOrm.Extensions;
+using MySqlConnector;
 
 namespace OpenOrm.SqlProvider.MySql
 {

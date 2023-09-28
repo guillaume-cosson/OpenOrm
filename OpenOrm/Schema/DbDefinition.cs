@@ -27,23 +27,23 @@ namespace OpenOrm.Schema
             }
         }
 
-        public static void SetDbDefinition(string db_name, string server_name, List<TableDefinition> tables)
+        public static void SetDbDefinition(string connection_string, List<TableDefinition> tables)
         {
-            if(!Definitions.ContainsKey($"{server_name}.{db_name}"))
+            if(!Definitions.ContainsKey(connection_string))
             {
-                Definitions.Add($"{server_name}.{db_name}", tables);
+                Definitions.Add(connection_string, tables);
             }
             else
             {
-                Definitions[$"{server_name}.{db_name}"] = tables;
+                Definitions[connection_string] = tables;
             }
         }
 
-        public static void Clear(string db_name = "", string server_name = "")
+        public static void Clear(string connection_string = "")
         {
-            if(!string.IsNullOrEmpty($"{server_name}{db_name}") && Definitions.ContainsKey($"{server_name}.{db_name}"))
+            if(!string.IsNullOrEmpty(connection_string) && Definitions.ContainsKey(connection_string))
             {
-                Definitions.Remove($"{server_name}.{db_name}");
+                Definitions.Remove(connection_string);
             }
             else
             {

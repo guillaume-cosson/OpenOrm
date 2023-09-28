@@ -32,14 +32,14 @@ namespace OpenOrm.SqlProvider.MySql
         public static MySqlExpressionParser Build<T>(Expression<Func<T, bool>> predicate, TableDefinition td)
         {
             MySqlExpressionParser sb = new MySqlExpressionParser();
-            sb.BuildFromExpression(predicate.Body, td, false);
+            sb.BuildFromExpression(predicate.Body, td, true, '`', '`');
             return sb;
         }
 
         public static string BuildSqlWhereFromExpression<T>(Expression<Func<T, bool>> predicate, TableDefinition td, out List<SqlParameterItem> parameters)
         {
             MySqlExpressionParser sb = new MySqlExpressionParser();
-            sb.BuildFromExpression(predicate.Body, td, false);
+            sb.BuildFromExpression(predicate.Body, td, true, '`', '`');
             parameters = sb.Parameters;
             return sb.Sql;
         }
@@ -47,43 +47,68 @@ namespace OpenOrm.SqlProvider.MySql
         public static string BuildSqlWhereFromExpressionWithParameters<T>(Expression<Func<T, bool>> predicate, TableDefinition td)
         {
             MySqlExpressionParser sb = new MySqlExpressionParser();
-            sb.BuildFromExpression(predicate.Body, td, false);
+            sb.BuildFromExpression(predicate.Body, td, true, '`', '`');
             return sb.SqlWithParameters;
         }
 
         internal override string GetContainsSqlString(string sql, string param_name, ExpressionType exptype)
         {
+            //if (exptype == ExpressionType.Not)
+            //{
+            //    return sql + $" NOT LIKE {param_name}";
+            //}
+            //else
+            //{
+            //    return sql + $" LIKE {param_name}";
+            //}
             if (exptype == ExpressionType.Not)
             {
-                return sql + $" NOT LIKE {param_name}";
+                return $" INSTR ({sql}, {param_name}) <= 0 "; //case sensitive
             }
             else
             {
-                return sql + $" LIKE {param_name}";
+                return $" INSTR ({sql}, {param_name}) > 0 "; //case sensitive
             }
         }
 
         internal override string GetStartsWithSqlString(string sql, string param_name, ExpressionType exptype)
         {
+            //if (exptype == ExpressionType.Not)
+            //{
+            //    return sql + $" NOT LIKE {param_name}";
+            //}
+            //else
+            //{
+            //    return sql + $" LIKE {param_name}";
+            //}
             if (exptype == ExpressionType.Not)
             {
-                return sql + $" NOT LIKE {param_name}";
+                return $" INSTR ({sql}, {param_name}) <> 1 "; //case sensitive
             }
             else
             {
-                return sql + $" LIKE {param_name}";
+                return $" INSTR ({sql}, {param_name}) = 1 "; //case sensitive
             }
         }
 
         internal override string GetEndsWithSqlString(string sql, string param_name, ExpressionType exptype)
         {
+            //if (exptype == ExpressionType.Not)
+            //{
+            //    return sql + $" NOT LIKE {param_name}";
+            //}
+            //else
+            //{
+            //    return sql + $" LIKE {param_name}";
+            //}
+
             if (exptype == ExpressionType.Not)
             {
-                return sql + $" NOT LIKE {param_name}";
+                return $" RIGHT({sql}, LENGTH({param_name})) <> {param_name} ";
             }
             else
             {
-                return sql + $" LIKE {param_name}";
+                return $" RIGHT({sql}, LENGTH({param_name})) = {param_name} ";
             }
         }
 
@@ -113,17 +138,20 @@ namespace OpenOrm.SqlProvider.MySql
 
         internal override string GetContainsFormatedValue(string value)
         {
-            return "%" + value + "%";
+            //return "%" + value + "%";
+            return value;
         }
 
         internal override string GetStartsWithFormatedValue(string value)
         {
-            return value + "%";
+            //return value + "%";
+            return value;
         }
 
         internal override string GetEndsWithFormatedValue(string value)
         {
-            return "%" + value;
+            //return "%" + value;
+            return value;
         }
 
         internal override string GetToUpperMethod(string value)

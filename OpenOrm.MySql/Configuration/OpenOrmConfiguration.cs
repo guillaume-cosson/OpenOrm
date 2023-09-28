@@ -1,8 +1,10 @@
-﻿using MySql.Data.MySqlClient;
+﻿//using MySql.Data.MySqlClient;
+
 using System;
 using System.Collections.Generic;
 using System.Text;
 using OpenOrm.CoreTools;
+using MySqlConnector;
 
 namespace OpenOrm.MySql
 {
